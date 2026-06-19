@@ -1,33 +1,45 @@
-# curve-jp
+# OptimizeCC
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+AI-powered contact center audit platform. Identifies $500K–$2M in improvement opportunities and delivers a prioritized roadmap.
 
-## Built with v0
+## Stack
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
-
-[Continue working on v0 →](https://v0.app/chat/projects/prj_pdwGzlkQ8sASsWWgwtAno9JuwEfW)
+- **Frontend:** Next.js 16.2.6 (App Router) · TypeScript · Tailwind CSS v4 · shadcn/ui · Recharts · Framer Motion
+- **Backend:** FastAPI (Python) · PostgreSQL · SQLAlchemy 2.0 · JWT auth · Claude AI agents
+- **Package manager:** pnpm
 
 ## Getting Started
 
-First, run the development server:
+### Frontend
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+pnpm install
+pnpm dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> First run: pnpm may prompt `pnpm approve-builds` for `sharp` and `msw` — run it and select all.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Backend
 
-## Learn More
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env    # set DATABASE_URL, SECRET_KEY, ANTHROPIC_API_KEY
+uvicorn app.main:app --reload   # http://localhost:8000
+```
 
-To learn more, take a look at the following resources:
+## Pages
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+| Route | Description |
+|---|---|
+| `/` | Marketing landing page |
+| `/login` | Sign in |
+| `/onboarding` | 6-step audit intake wizard |
+| `/dashboard` | Customer audit dashboard |
+| `/audit` | Full gap report |
+| `/admin/dashboard` | Admin — all clients overview |
+| `/admin/clients` | Admin — client management |
+
+## Project Docs
+
+See [CLAUDE.md](./CLAUDE.md) for full architecture, design decisions, what's done, and what's next.

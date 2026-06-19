@@ -31,106 +31,124 @@ const monthlyRevenue = [
 ]
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  completed: { label: "Completed", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-  in_progress: { label: "In Progress", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
-  data_collection: { label: "Data Collection", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-  pending: { label: "Not Started", color: "text-slate-400", bg: "bg-slate-50", border: "border-slate-200" },
+  completed:       { label: "Completed",       color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
+  in_progress:     { label: "In Progress",     color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200" },
+  data_collection: { label: "Data Collection", color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200" },
+  pending:         { label: "Not Started",      color: "text-slate-500",   bg: "bg-slate-50",   border: "border-slate-200" },
 }
 
-const dotColor: Record<string, string> = { done: "bg-emerald-500", partial: "bg-amber-400", pending: "bg-slate-200" }
+const dotColor: Record<string, string> = {
+  done: "bg-emerald-500",
+  partial: "bg-amber-400",
+  pending: "bg-slate-300",
+}
 
 export default function AdminDashboard() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <AdminSidebar />
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-8 lg:p-10 overflow-auto">
         <div className="max-w-6xl">
-          <div className="flex items-center justify-between mb-8">
+
+          {/* Page header */}
+          <div className="flex items-center justify-between mb-10">
             <div>
-              <h1 className="text-slate-900 text-2xl font-bold">Admin Overview</h1>
-              <p className="text-slate-400 text-sm mt-1">Monitor all active audits and data collection progress</p>
+              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-1">Admin Console</p>
+              <h1 className="text-3xl font-bold text-slate-900">Overview</h1>
+              <p className="text-slate-500 text-base mt-1">Monitor all active audits and data collection progress</p>
             </div>
             <Link href="/admin/clients">
-              <button className="flex items-center gap-2 px-5 py-2.5 bg-[#0a1628] hover:bg-[#0a1628]/90 text-white text-sm font-semibold rounded-xl transition-all shadow-md">
+              <button className="flex items-center gap-2 px-6 py-3 bg-[#0a1628] hover:bg-[#0a1628]/90 text-white text-sm font-semibold rounded-xl transition-all shadow-md">
                 <Plus className="w-4 h-4" /> New Client
               </button>
             </Link>
           </div>
 
           {/* KPI cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             {[
-              { label: "Active Clients", value: "4", sub: "2 audits in progress", icon: Users, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-              { label: "Data Readiness", value: "54%", sub: "Avg across all", icon: Database, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
-              { label: "Revenue (YTD)", value: "$285K", sub: "+65% vs last year", icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
-              { label: "Open Alerts", value: "4", sub: "Need attention", icon: AlertCircle, color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
+              { label: "Active Clients", value: "4", sub: "2 audits in progress", icon: Users },
+              { label: "Data Readiness", value: "54%", sub: "Avg across all clients", icon: Database },
+              { label: "Revenue (YTD)", value: "$285K", sub: "+65% vs last year", icon: DollarSign },
+              { label: "Open Alerts", value: "4", sub: "Need attention", icon: AlertCircle },
             ].map((card, i) => {
               const Icon = card.icon
               return (
                 <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
-                  className={`${card.bg} border ${card.border} rounded-2xl p-5`}>
-                  <Icon className={`w-5 h-5 ${card.color} mb-3`} />
-                  <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{card.label}</p>
-                  <p className="text-xs text-slate-300 mt-1">{card.sub}</p>
+                  className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                  <div className="w-10 h-10 rounded-xl bg-[#0a1628]/8 border border-[#0a1628]/10 flex items-center justify-center mb-4">
+                    <Icon className="w-5 h-5 text-[#0a1628]" />
+                  </div>
+                  <p className="text-3xl font-black text-[#0a1628] mb-1">{card.value}</p>
+                  <p className="text-sm font-semibold text-slate-600">{card.label}</p>
+                  <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
                 </motion.div>
               )
             })}
           </div>
 
           {/* Data collection table */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 mb-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-slate-900 font-bold text-lg">Data Collection Status</h2>
-              <span className="text-xs text-slate-300">Live · Updated now</span>
+          <div className="rounded-2xl border border-slate-200 bg-white p-7 mb-6 shadow-sm">
+            <div className="flex items-center justify-between mb-7">
+              <h2 className="text-xl font-bold text-slate-900">Data Collection Status</h2>
+              <span className="text-xs text-slate-400 font-medium">Live · Updated now</span>
             </div>
             <div className="space-y-4">
               {clientAudits.map((client) => {
                 const sc = statusConfig[client.status]
                 return (
                   <motion.div key={client.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="border border-slate-100 rounded-xl p-5 hover:border-slate-200 hover:shadow-sm transition-all">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#0a1628] rounded-xl flex items-center justify-center font-bold text-white text-sm">{client.logo}</div>
+                    className="border-2 border-slate-100 hover:border-slate-200 rounded-2xl p-6 transition-all">
+                    <div className="flex items-start justify-between mb-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#0a1628] rounded-xl flex items-center justify-center font-bold text-white text-sm shrink-0">{client.logo}</div>
                         <div>
-                          <h3 className="text-slate-900 font-semibold">{client.name}</h3>
-                          <p className="text-slate-400 text-xs">Phase: {client.phase} · Start: {client.start}</p>
+                          <h3 className="text-slate-900 font-bold text-base">{client.name}</h3>
+                          <p className="text-slate-400 text-sm mt-0.5">Phase: {client.phase} · Started: {client.start}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {client.alerts > 0 && <span className="bg-red-50 border border-red-200 text-red-600 text-xs font-semibold px-2 py-0.5 rounded-full">{client.alerts} alert{client.alerts > 1 ? "s" : ""}</span>}
-                        <span className={`border text-xs font-semibold px-2.5 py-1 rounded-full ${sc.bg} ${sc.border} ${sc.color}`}>{sc.label}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {client.alerts > 0 && (
+                          <span className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold px-3 py-1 rounded-full">
+                            {client.alerts} alert{client.alerts > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        <span className={`border text-xs font-semibold px-3 py-1.5 rounded-full ${sc.bg} ${sc.border} ${sc.color}`}>{sc.label}</span>
                       </div>
                     </div>
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-slate-400">Audit Progress</span>
-                        <span className="text-slate-600 font-semibold">{client.progress}%</span>
+
+                    <div className="mb-5">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-slate-500 font-medium">Audit Progress</span>
+                        <span className="text-slate-700 font-bold">{client.progress}%</span>
                       </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#0a1628] rounded-full" style={{ width: `${client.progress}%` }} />
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#0a1628] rounded-full transition-all" style={{ width: `${client.progress}%` }} />
                       </div>
                     </div>
+
                     <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-xs text-slate-400">Data Collection ({client.dataCollected}%)</p>
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-sm font-medium text-slate-500">Data Collection ({client.dataCollected}%)</p>
                         {client.dataCollected >= 70
-                          ? <span className="flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3 h-3" />Ready</span>
-                          : <span className="flex items-center gap-1 text-xs text-amber-500"><Clock className="w-3 h-3" />Awaiting data</span>}
+                          ? <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Ready</span>
+                          : <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-500"><Clock className="w-3.5 h-3.5" />Awaiting data</span>}
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-2">
                         {client.dataItems.map((item) => (
-                          <div key={item.label} className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor[item.s]}`} />
+                          <div key={item.label} className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor[item.s]}`} />
                             {item.label}
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
-                      <p className="text-xs text-slate-300">Due: {client.due}</p>
-                      <button className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-semibold">View Details <ArrowRight className="w-3 h-3" /></button>
+
+                    <div className="flex justify-between items-center mt-5 pt-4 border-t border-slate-100">
+                      <p className="text-sm text-slate-400">Due: {client.due}</p>
+                      <button className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700">
+                        View Details <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   </motion.div>
                 )
@@ -138,32 +156,40 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-slate-900 font-semibold mb-4">Revenue (YTD, $K)</h3>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-6">Revenue YTD ($K)</h3>
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={monthlyRevenue}>
-                  <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, color: "#0f172a" }} />
-                  <Line type="monotone" dataKey="revenue" stroke="#0a1628" strokeWidth={2} dot={{ fill: "#0a1628" }} />
+                  <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, fontSize: 13, color: "#0f172a" }} />
+                  <Line type="monotone" dataKey="revenue" stroke="#0a1628" strokeWidth={2.5} dot={{ fill: "#0a1628", r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-slate-900 font-semibold mb-4">Alerts Requiring Action</h3>
-              <div className="space-y-2.5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-5">Alerts Requiring Action</h3>
+              <div className="space-y-3">
                 {[
                   { client: "Pinnacle Insurance", msg: "Call recordings access expired", severity: "high" },
                   { client: "Pinnacle Insurance", msg: "Metrics export missing WFM data", severity: "medium" },
                   { client: "Pinnacle Insurance", msg: "Stakeholder interview not scheduled", severity: "low" },
                   { client: "Meridian Bank", msg: "QA reports partially received", severity: "medium" },
                 ].map((alert, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${alert.severity === "high" ? "bg-red-50 border-red-200" : alert.severity === "medium" ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}>
-                    <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${alert.severity === "high" ? "text-red-500" : alert.severity === "medium" ? "text-amber-500" : "text-slate-400"}`} />
+                  <div key={i} className={`flex items-start gap-3 p-4 rounded-xl border ${
+                    alert.severity === "high" ? "bg-red-50 border-red-200"
+                    : alert.severity === "medium" ? "bg-amber-50 border-amber-200"
+                    : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <AlertCircle className={`w-5 h-5 mt-0.5 shrink-0 ${
+                      alert.severity === "high" ? "text-red-500"
+                      : alert.severity === "medium" ? "text-amber-500"
+                      : "text-slate-400"
+                    }`} />
                     <div>
-                      <p className="text-xs font-semibold text-slate-700">{alert.client}</p>
-                      <p className="text-xs text-slate-500">{alert.msg}</p>
+                      <p className="text-sm font-semibold text-slate-800">{alert.client}</p>
+                      <p className="text-sm text-slate-500 mt-0.5">{alert.msg}</p>
                     </div>
                   </div>
                 ))}
