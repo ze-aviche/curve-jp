@@ -67,8 +67,11 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          <a href="/login" className="rounded-md px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground">
+            Sign In
+          </a>
           <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <a href="#book-audit">Book Audit</a>
+            <a href="/onboarding">Book Audit</a>
           </Button>
         </div>
 

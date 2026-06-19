@@ -6,7 +6,7 @@ const columns = [
     icon: ClipboardCheck,
     phase: "Audit",
     title: "Comprehensive Framework Audit",
-    body: "We analyze your platform against 100 industry best practices across 8 functional areas.",
+    body: "We conduct a thorough analysis of your contact center platform, processes, and technology stack.",
     items: ["Routing", "IVR", "Analytics", "Integrations", "Automation", "Compliance", "Agent Tools", "Operations"],
   },
   {

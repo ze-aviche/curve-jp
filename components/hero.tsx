@@ -23,7 +23,7 @@ export function Hero() {
 
           <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-white/70">
             Our AI-powered audit identifies <span className="font-semibold text-white">$500K–$2M</span> in untapped
-            improvement opportunities. Get a detailed roadmap in 6 weeks—with zero implementation risk.
+            improvement opportunities. Get a detailed roadmap quickly—with zero implementation risk.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -47,11 +47,33 @@ export function Hero() {
             <p className="text-xs font-medium uppercase tracking-wider text-white/50">
               Trusted by 50+ mid-market &amp; enterprise contact centers
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm font-semibold text-white/40">
-              <span>Regional Bank Group</span>
-              <span>MidState Insurance</span>
-              <span>Helios Tech</span>
-              <span>Northwind Financial</span>
+            <div className="relative mt-4 overflow-hidden">
+              <div className="flex animate-marquee gap-x-10 text-sm font-semibold text-white/40 whitespace-nowrap">
+                <span>Regional Bank Group</span>
+                <span>·</span>
+                <span>MidState Insurance</span>
+                <span>·</span>
+                <span>Helios Tech</span>
+                <span>·</span>
+                <span>Northwind Financial</span>
+                <span>·</span>
+                <span>Summit Credit Union</span>
+                <span>·</span>
+                <span>Apex Telecom</span>
+                <span>·</span>
+                <span>Regional Bank Group</span>
+                <span>·</span>
+                <span>MidState Insurance</span>
+                <span>·</span>
+                <span>Helios Tech</span>
+                <span>·</span>
+                <span>Northwind Financial</span>
+                <span>·</span>
+                <span>Summit Credit Union</span>
+                <span>·</span>
+                <span>Apex Telecom</span>
+                <span>·</span>
+              </div>
             </div>
           </div>
         </div>
@@ -83,7 +105,7 @@ export function Hero() {
       <div className="relative border-t border-white/10 bg-black/20">
         <div className="mx-auto grid max-w-7xl grid-cols-1 gap-px px-4 py-6 sm:grid-cols-3 sm:px-6 lg:px-8">
           {[
-            { icon: Clock, label: "6-week audit turnaround" },
+            { icon: Clock, label: "Quick audit turnaround" },
             { icon: ShieldCheck, label: "SOC 2 Type II · zero PII access" },
             { icon: TrendingUp, label: "2–3 month typical payback" },
           ].map(({ icon: Icon, label }) => (

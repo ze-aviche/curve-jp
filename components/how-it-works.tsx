@@ -1,45 +1,24 @@
 import { Button } from "@/components/ui/button"
+import { Search, BarChart3, Rocket } from "lucide-react"
 
-const timeline = [
+const steps = [
   {
-    week: "Week 1–2",
+    icon: Search,
+    step: "1",
     title: "Discovery",
-    status: "Understanding your current state",
-    points: [
-      "You answer a detailed questionnaire (4–6 hours)",
-      "We get secure, read-only system access",
-      "We review your documentation",
-    ],
+    body: "We get a clear picture of your current contact center setup, systems, and goals.",
   },
   {
-    week: "Week 3",
-    title: "Data Collection & Analysis",
-    status: "Building a comprehensive data picture",
-    points: [
-      "Automated collection from your systems via APIs",
-      "Simple manual export templates",
-      "Key stakeholder interviews",
-    ],
+    icon: BarChart3,
+    step: "2",
+    title: "Analysis",
+    body: "AI-powered analysis surfaces gaps and quantifies every opportunity by business impact and ROI.",
   },
   {
-    week: "Week 4–5",
-    title: "Analysis & Reporting",
-    status: "Generating your detailed audit report",
-    points: [
-      "AI-powered analysis against the 100-feature framework",
-      "Gap scoring and ROI calculation",
-      "Solution design for each gap",
-    ],
-  },
-  {
-    week: "Week 6",
-    title: "Presentation & Next Steps",
-    status: "Ready to implement (optional)",
-    points: [
-      "Audit report delivery (50+ pages)",
-      "Executive presentation of findings",
-      "Recommended implementation roadmap",
-    ],
+    icon: Rocket,
+    step: "3",
+    title: "Roadmap Delivery",
+    body: "You receive a prioritized action plan with clear next steps—ready to execute immediately.",
   },
 ]
 
@@ -50,36 +29,33 @@ export function HowItWorks() {
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold uppercase tracking-wider text-accent">How It Works</p>
           <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            From Audit to Implementation in 6 Weeks
+            From Audit to Action Plan — Fast
           </h2>
+          <p className="mt-4 text-pretty text-lg leading-relaxed text-muted-foreground">
+            A straightforward process designed to deliver clarity and results with minimal disruption to your team.
+          </p>
         </div>
 
-        <ol className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {timeline.map((step, i) => (
-            <li key={step.week} className="relative flex flex-col rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                  {i + 1}
+        <ol className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-3">
+          {steps.map(({ icon: Icon, step, title, body }) => (
+            <li key={step} className="relative flex flex-col rounded-2xl border border-border bg-card p-8 shadow-sm">
+              <div className="flex items-center gap-4">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                  {step}
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-accent">{step.week}</span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
               </div>
-              <h3 className="mt-4 text-lg font-bold text-foreground">{step.title}</h3>
-              <ul className="mt-3 flex-1 space-y-2">
-                {step.points.map((p) => (
-                  <li key={p} className="flex gap-2 text-sm leading-relaxed text-muted-foreground">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-info" aria-hidden="true" />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 rounded-lg bg-info/10 px-3 py-2 text-xs font-medium text-info">{step.status}</p>
+              <h3 className="mt-5 text-xl font-bold text-foreground">{title}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </li>
           ))}
         </ol>
 
         <div className="mt-10 text-center">
           <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <a href="#book-audit">See What&apos;s In the Audit Report</a>
+            <a href="#book-audit">Book Your Free Audit</a>
           </Button>
         </div>
       </div>

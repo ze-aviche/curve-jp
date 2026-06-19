@@ -10,7 +10,7 @@ const testimonials = [
   },
   {
     quote:
-      "We've worked with big consulting firms. OptimizeCC was faster, cheaper, and more actionable. The 100-feature framework is brilliant—finally, a clear standard for what 'excellent' looks like.",
+      "We've worked with big consulting firms. OptimizeCC was faster, cheaper, and more actionable. Finally, a clear standard for what 'excellent' looks like.",
     name: "Sarah Johnson",
     title: "Director of Technology",
     company: "MidState Insurance",
