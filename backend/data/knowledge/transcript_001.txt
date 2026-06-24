@@ -1,0 +1,18 @@
+CALL TRANSCRIPT 001 | Platform: Genesys Cloud CX | Disposition: Transferred, Unresolved
+Category: Inbound Call Handling, Customer Experience
+
+[IVR] Thank you for calling. Press 1 for accounts, 2 for cards, 3 for loans.
+[Customer] (presses 2) ... (presses 0 repeatedly to reach an agent)
+[IVR] Please hold. Estimated wait time is 11 minutes.
+[Agent A] Thanks for holding, this is Maria. Can I get your account number?
+[Customer] I already typed it into the keypad twice.
+[Agent A] I'm sorry, I don't see it on my screen, the system didn't pass it through. Can you read it to me?
+[Customer] (reads 12-digit number)
+[Agent A] Thank you. It looks like your dispute is actually handled by our cards back-office team. Let me transfer you.
+[Customer] I've already been transferred once.
+[Agent A] I understand, unfortunately I don't have access to dispute records from here.
+[Customer] (transferred, call drops during transfer)
+
+ANALYST NOTES: No CRM screen-pop (account number re-collected). No data pass-through from IVR.
+Skills-based routing failed — cards dispute routed to general queue. Transfer caused abandonment.
+Root gaps: Integration & Data (screen-pop), Inbound Call Handling (routing), no 360 customer view.

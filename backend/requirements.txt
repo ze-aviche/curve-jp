@@ -2,8 +2,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 pydantic-settings==2.5.2
+email-validator==2.2.0
 sqlalchemy==2.0.35
-asyncpg==0.29.0
+asyncpg==0.30.0  # 0.29.0 has no Python 3.13 wheel (needs C++ build tools); 0.30.0 ships cp313 wheels
 alembic==1.13.3
 anthropic==0.37.1
 python-jose[cryptography]==3.3.0
@@ -18,4 +19,6 @@ duckdb==1.1.1
 langgraph==0.2.38
 langchain-anthropic==0.2.3
 langchain-core==0.3.10
+chromadb==1.5.9  # local vector store for the RAG layer (app/rag)
+prometheus-client==0.21.0  # /metrics endpoint (app/core/observability)
 sentry-sdk[fastapi]==2.16.0

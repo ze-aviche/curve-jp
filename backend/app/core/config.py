@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 
+    # Event bus transport: "memory" (single process) or "redis" (scaled web+worker)
+    EVENT_BUS_BACKEND: str = "memory"
+    # Cache TTL for expensive reads (seconds)
+    CACHE_TTL_SECONDS: int = 300
+
     # AWS S3
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
@@ -26,6 +31,10 @@ class Settings(BaseSettings):
     # AI APIs
     ANTHROPIC_API_KEY: str = ""
     DEEPGRAM_API_KEY: str = ""
+
+    # External source systems (integration connectors)
+    # amber-voice-agent's SQLite call store — source for the voice->RAG bridge.
+    VOICE_AGENT_DB_PATH: str = r"D:\projects\amber-voice-agent\tenants.db"
 
     # Platform APIs
     GENESYS_CLIENT_ID: Optional[str] = None

@@ -1,0 +1,17 @@
+CALL TRANSCRIPT 002 | Platform: Genesys Cloud CX | Disposition: Resolved, High AHT (9m 40s)
+Category: Automation & AI, Agent Experience
+
+[Agent B] Thank you for calling, this is Devin. How can I help?
+[Customer] My card was declined on a purchase but I have funds.
+[Agent B] Let me look into that. One moment... (searches three different systems)
+[Agent B] Okay I need to check the fraud-hold system, that's a separate login... bear with me.
+[Customer] (waits ~90 seconds)
+[Agent B] I see a fraud hold was placed automatically. I'll remove it. I also need to document this in our notes manually after the call.
+[Customer] Why was it held?
+[Agent B] The system flagged an out-of-state transaction. There's no note explaining it to me, so I'm guessing based on the location.
+[Customer] Okay, thanks.
+[Agent B] (spends 60s on after-call work writing notes)
+
+ANALYST NOTES: Agent toggled 3 systems (no unified desktop). No real-time agent assist to surface
+fraud-hold reason or next-best-action. Manual after-call work ~60s. High AHT driven by tooling, not complexity.
+Root gaps: Automation & AI (real-time assist, auto-summarization), Agent Experience (unified desktop).

@@ -1,0 +1,15 @@
+CALL TRANSCRIPT 003 | Platform: Genesys Cloud CX | Disposition: Resolved via self-service escalation
+Category: Compliance & Risk, Analytics & Insights
+
+[IVR] For security, please say or enter your date of birth.
+[Customer] (provides DOB)
+[Agent C] Thanks. Before we proceed I need to read a required disclosure... (reads 40-second script)
+[Customer] Okay.
+[Agent C] You wanted to update your address. I can do that. (updates) Done.
+[Customer] Will this affect my statements?
+[Agent C] It should, but honestly I'm not 100% sure how the paperless settings interact. Let me put you on a brief hold.
+
+ANALYST NOTES: Compliance disclosure read manually with no logging that it was delivered — audit risk
+if a dispute arises. Only 2% of calls are QA-sampled, so disclosure adherence is largely unmeasured.
+No analytics tagging this call's intent automatically. Knowledge gap on paperless interaction.
+Root gaps: Compliance & Risk (disclosure logging, 100% QA), Analytics & Insights (auto intent tagging).
