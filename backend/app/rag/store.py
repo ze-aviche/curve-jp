@@ -22,6 +22,10 @@ from typing import Protocol
 import chromadb
 from chromadb.utils import embedding_functions
 
+from app.rag.rag_logging import get_logger, preview
+
+log = get_logger("store")
+
 # Persist the index next to the backend so it survives restarts.
 PERSIST_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "chroma")
 COLLECTION = "cc_knowledge"
@@ -40,6 +44,8 @@ class ChromaStore:
 
     def __init__(self) -> None:
         os.makedirs(PERSIST_DIR, exist_ok=True)
+        log.info("init ChromaStore — persist dir=%s collection=%s",
+                 os.path.abspath(PERSIST_DIR), COLLECTION)
         self._client = chromadb.PersistentClient(path=PERSIST_DIR)
         # DefaultEmbeddingFunction downloads a small all-MiniLM-L6-v2 ONNX model
         # on first use and runs it locally via onnxruntime — real embeddings,
@@ -50,18 +56,31 @@ class ChromaStore:
             embedding_function=self._ef,
             metadata={"hnsw:space": "cosine"},
         )
+        log.info("collection ready — %d chunks, metric=cosine, embedder=all-MiniLM-L6-v2",
+                 self._col.count())
 
     def add(self, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
         # upsert so re-ingesting the same source doesn't duplicate rows.
+        before = self._col.count()
+        log.info("embed+upsert %d chunks into '%s'…", len(documents), COLLECTION)
         self._col.upsert(ids=ids, documents=documents, metadatas=metadatas)
+        after = self._col.count()
+        log.info("upsert done — collection %d -> %d (+%d new)",
+                 before, after, after - before)
 
     def query(self, text: str, k: int = 4, where: dict | None = None) -> list[dict]:
+        log.info("query (k=%d%s): %s", k,
+                 f", where={where}" if where else "", preview(text, 80))
         res = self._col.query(query_texts=[text], n_results=k, where=where)
         out: list[dict] = []
-        for doc, meta, dist in zip(
+        for rank, (doc, meta, dist) in enumerate(zip(
             res["documents"][0], res["metadatas"][0], res["distances"][0]
-        ):
+        ), start=1):
             out.append({"text": doc, "metadata": meta, "distance": dist})
+            log.info("  hit #%d  dist=%.3f  %-28s  %s",
+                     rank, dist, meta.get("source", "?"), preview(doc, 70))
+        if not out:
+            log.warning("  no hits returned")
         return out
 
     def count(self) -> int:

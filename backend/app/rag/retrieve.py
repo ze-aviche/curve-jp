@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.rag.rag_logging import get_logger
 from app.rag.store import get_store
+
+log = get_logger("retrieve")
 
 # Metric -> (human label, threshold below/above which it's "weak", direction)
 # direction "low" means lower is worse; "high" means higher is worse.
@@ -54,12 +57,18 @@ def retrieve_context(client_data: dict[str, Any], k: int = 5) -> list[str]:
     store = get_store()
     if store.count() == 0:
         # Knowledge base empty (not ingested yet) — degrade gracefully.
+        log.warning("retrieve_context: knowledge base empty — returning no context")
         return []
+    weak = _weak_areas(client_data)
+    log.info("metric-driven retrieval — weak areas: %s",
+             ", ".join(weak) if weak else "(none; using general query)")
     query = build_query(client_data)
+    log.info("built query: %s", query)
     hits = store.query(query, k=k)
     snippets: list[str] = []
     for h in hits:
         src = h["metadata"].get("source", "unknown")
         dtype = h["metadata"].get("type", "doc")
         snippets.append(f"[{dtype}:{src}] {h['text']}")
+    log.info("retrieve_context: returning %d snippets to the research agent", len(snippets))
     return snippets

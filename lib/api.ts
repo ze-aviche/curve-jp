@@ -38,4 +38,19 @@ export const api = {
     list: (category?: string) =>
       req(`/api/v1/industry-players/${category ? `?category=${category}` : ""}`),
   },
+  chat: {
+    ask: (
+      question: string,
+      history?: { role: "user" | "assistant"; content: string }[],
+      k?: number,
+    ) =>
+      req<{
+        answer: string
+        sources: { source: string; distance: number }[]
+        grounded: boolean
+      }>("/api/v1/chat", {
+        method: "POST",
+        body: JSON.stringify({ question, history, k }),
+      }),
+  },
 }

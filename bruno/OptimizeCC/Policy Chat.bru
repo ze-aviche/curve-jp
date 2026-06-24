@@ -1,0 +1,38 @@
+meta {
+  name: Policy Chat
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/chat
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "question": "How many days a week can agents work from home?",
+    "k": 5
+  }
+}
+
+docs {
+  RAG policy chatbot. Embeds the question, semantic-searches the cc_knowledge
+  vector store, and Claude answers grounded ONLY in the retrieved chunks.
+
+  Response: { answer, sources: [{ source, distance }], grounded }
+
+  Requires the backend running (uvicorn app.main:app) with ANTHROPIC_API_KEY set,
+  and documents already ingested (python -m app.rag.ingest).
+
+  Multi-turn: pass prior turns in "history":
+    "history": [
+      { "role": "user", "content": "..." },
+      { "role": "assistant", "content": "..." }
+    ]
+}

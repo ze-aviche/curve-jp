@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, FileText, Map, TrendingUp, LogOut } from "lucide-react"
+import { LayoutDashboard, FileText, Map, MessageSquare, TrendingUp, LogOut } from "lucide-react"
 
 const links = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/audit", icon: FileText, label: "Audit Report" },
   { href: "/roadmap", icon: Map, label: "Roadmap" },
+  { href: "/chat", icon: MessageSquare, label: "Policy Chat" },
 ]
 
 export default function CustomerSidebar() {

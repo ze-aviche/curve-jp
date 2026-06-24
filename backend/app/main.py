@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1.endpoints import audit, auth, clients, industry_players, integrations
+from app.api.v1.endpoints import audit, auth, chat, clients, industry_players, integrations
 import app.integrations  # noqa: F401  (registers all connectors on import)
 from app.events.bus import Event, bus
 from app.core.observability import ObservabilityMiddleware, metrics_response
@@ -29,6 +29,7 @@ app.include_router(clients.router, prefix="/api/v1")
 app.include_router(industry_players.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(integrations.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
 
 
 # --- Event-driven wiring ---------------------------------------------------

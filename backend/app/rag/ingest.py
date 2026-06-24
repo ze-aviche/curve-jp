@@ -21,7 +21,10 @@ from __future__ import annotations
 import glob
 import os
 
+from app.rag.rag_logging import configure, get_logger, preview
 from app.rag.store import get_store
+
+log = get_logger("ingest")
 
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "knowledge")
 CHUNK_SIZE = 800
@@ -61,7 +64,13 @@ def _extract_pdf(path: str) -> str:
 
     reader = PdfReader(path)
     pages = [(page.extract_text() or "").strip() for page in reader.pages]
-    return "\n\n".join(p for p in pages if p)
+    non_empty = [p for p in pages if p]
+    log.info("PDF %s: %d pages, %d with extractable text",
+             os.path.basename(path), len(pages), len(non_empty))
+    if pages and not non_empty:
+        log.warning("PDF %s has no text layer (scanned image?) — needs OCR",
+                    os.path.basename(path))
+    return "\n\n".join(non_empty)
 
 
 def _load_text(path: str) -> str:
@@ -94,27 +103,44 @@ def ingest() -> int:
     metas: list[dict] = []
 
     pattern = os.path.join(KNOWLEDGE_DIR, "*")
-    for path in sorted(glob.glob(pattern)):
-        if os.path.isdir(path):
-            continue
-        text = _load_text(path)
+    files = [p for p in sorted(glob.glob(pattern)) if not os.path.isdir(p)]
+    log.info("INGEST start — scanning %s (%d files)", KNOWLEDGE_DIR, len(files))
+
+    files_ingested = 0
+    for path in files:
         source = os.path.basename(path)
+        # --- LOAD ---
+        text = _load_text(path)
         if not text.strip():
-            # empty/unsupported/scanned file — nothing to embed.
-            print(f"  skipped (no extractable text): {source}")
+            log.warning("skip %s — no extractable text", source)
             continue
         dtype = _doc_type(source)
-        for i, chunk in enumerate(chunk_text(text)):
+        # --- CHUNK ---
+        chunks = chunk_text(text)
+        log.info("load %-32s type=%-9s %6d chars -> %3d chunks",
+                 source, dtype, len(text), len(chunks))
+        for i, chunk in enumerate(chunks):
             ids.append(f"{source}::{i}")
             docs.append(chunk)
             metas.append({"source": source, "type": dtype, "chunk": i})
+            log.debug("  chunk %s::%d (%d chars) %s",
+                      source, i, len(chunk), preview(chunk))
+        files_ingested += 1
 
+    # --- EMBED + INDEX (store.add embeds each doc then upserts) ---
     if docs:
+        log.info("embedding + indexing %d chunks from %d files…",
+                 len(docs), files_ingested)
         store.add(ids=ids, documents=docs, metadatas=metas)
-    print(f"Ingested {len(docs)} chunks from {KNOWLEDGE_DIR}")
-    print(f"Collection now holds {store.count()} chunks total.")
+    else:
+        log.warning("nothing to ingest — no documents with text found")
+
+    log.info("INGEST done — %d chunks added; collection now holds %d total",
+             len(docs), store.count())
     return len(docs)
 
 
 if __name__ == "__main__":
+    import logging
+    configure(logging.DEBUG)  # DEBUG so you see per-chunk previews on a manual run
     ingest()
