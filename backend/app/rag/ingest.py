@@ -8,6 +8,11 @@ that would otherwise be cut at a boundary. Here we use a simple paragraph-aware
 character splitter — good enough for transcripts/benchmarks. Production systems
 use token-based splitters (e.g. RecursiveCharacterTextSplitter).
 
+LOADING:
+Text/markdown files are read directly. PDFs (company policies, vendor docs) are
+binary, so we extract their text first with pypdf before the *same* chunk -> embed
+-> store path takes over — extraction is the only PDF-specific step.
+
 Run (from backend/, venv active):
     python -m app.rag.ingest
 """
@@ -21,6 +26,8 @@ from app.rag.store import get_store
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "knowledge")
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
+# File extensions read straight off disk as UTF-8 text.
+TEXT_EXTS = {".md", ".txt"}
 
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -42,12 +49,41 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) 
     return chunks
 
 
+def _extract_pdf(path: str) -> str:
+    """Pull plain text out of a PDF, page by page.
+
+    pypdf is pure-Python (no system deps) and extracts the text layer of each
+    page. Page texts are joined with blank lines so the downstream paragraph-aware
+    splitter still sees natural boundaries. Scanned/image-only PDFs have no text
+    layer and yield empty strings — those would need OCR (out of scope here).
+    """
+    from pypdf import PdfReader  # imported lazily so non-PDF runs don't need it
+
+    reader = PdfReader(path)
+    pages = [(page.extract_text() or "").strip() for page in reader.pages]
+    return "\n\n".join(p for p in pages if p)
+
+
+def _load_text(path: str) -> str:
+    """Return the plain text of a knowledge file, dispatching on extension."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".pdf":
+        return _extract_pdf(path)
+    if ext in TEXT_EXTS:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    # Unknown/binary type — skip rather than crash on a UTF-8 decode.
+    return ""
+
+
 def _doc_type(filename: str) -> str:
     name = os.path.basename(filename).lower()
     if "transcript" in name:
         return "transcript"
     if "benchmark" in name:
         return "benchmark"
+    if name.endswith(".pdf") or "policy" in name:
+        return "policy"
     return "doc"
 
 
@@ -61,9 +97,12 @@ def ingest() -> int:
     for path in sorted(glob.glob(pattern)):
         if os.path.isdir(path):
             continue
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
+        text = _load_text(path)
         source = os.path.basename(path)
+        if not text.strip():
+            # empty/unsupported/scanned file — nothing to embed.
+            print(f"  skipped (no extractable text): {source}")
+            continue
         dtype = _doc_type(source)
         for i, chunk in enumerate(chunk_text(text)):
             ids.append(f"{source}::{i}")

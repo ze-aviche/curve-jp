@@ -20,5 +20,6 @@ langgraph==0.2.38
 langchain-anthropic==0.2.3
 langchain-core==0.3.10
 chromadb==1.5.9  # local vector store for the RAG layer (app/rag)
+pypdf==5.1.0  # PDF text extraction for the RAG ingest pipeline (app/rag/ingest)
 prometheus-client==0.21.0  # /metrics endpoint (app/core/observability)
 sentry-sdk[fastapi]==2.16.0
