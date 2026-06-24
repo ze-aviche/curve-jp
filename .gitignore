@@ -14,5 +14,5 @@ node_modules
 .next/
 .DS_Store
 
-# interview-prep files 
-docs\interview_prep.md
+# interview-prep files
+docs/interview_prep.md
