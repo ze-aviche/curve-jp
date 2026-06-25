@@ -29,12 +29,19 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.core.config import settings
 from app.rag.rag_logging import get_logger, preview
+from app.rag.router import route_doc_types
 from app.rag.store import get_store
 
 log = get_logger("chat")
 
 MODEL = "claude-sonnet-4-6"
 DEFAULT_K = 5
+# Scope of retrieval (the collection is shared across policies, transcripts, voice
+# calls, CRM cases, benchmarks). Options for `doc_type`:
+#   "auto"  -> a router LLM classifies the question and picks the relevant type(s)
+#   None    -> search everything
+#   "policy" / ["policy", "crm_case"] -> force a fixed scope
+DEFAULT_DOC_TYPE: object = "auto"
 
 SYSTEM_PROMPT = """You are a company policy assistant. Answer the user's question \
 using ONLY the reference context provided below. The context is retrieved from the \
@@ -57,8 +64,38 @@ def _llm() -> ChatAnthropic:
     )
 
 
-def retrieve_for_question(question: str, k: int = DEFAULT_K) -> list[dict]:
+def _resolve_scope(question: str, doc_type: object) -> list[str]:
+    """Turn the `doc_type` setting into a concrete list of types to search.
+
+    "auto" -> ask the router; None -> [] (all); str -> [str]; list -> list.
+    """
+    if doc_type == "auto":
+        return route_doc_types(question)
+    if doc_type is None:
+        return []
+    if isinstance(doc_type, str):
+        return [doc_type]
+    return list(doc_type)  # already a list/tuple of types
+
+
+def _where_for(types: list[str]) -> dict | None:
+    """Build a Chroma metadata filter from a list of types."""
+    if not types:
+        return None  # no filter -> search everything
+    if len(types) == 1:
+        return {"type": types[0]}
+    return {"type": {"$in": types}}
+
+
+def retrieve_for_question(
+    question: str,
+    k: int = DEFAULT_K,
+    doc_type: object = DEFAULT_DOC_TYPE,
+) -> list[dict]:
     """Semantic-search the knowledge base with the raw question.
+
+    `doc_type` controls which document types are eligible (see DEFAULT_DOC_TYPE):
+    "auto" routes via an LLM, None searches all, a str/list forces a fixed scope.
 
     Returns the raw hits (text + metadata + distance) so callers can both build the
     prompt and surface citations to the user.
@@ -66,7 +103,8 @@ def retrieve_for_question(question: str, k: int = DEFAULT_K) -> list[dict]:
     store = get_store()
     if store.count() == 0:
         return []
-    return store.query(question, k=k)
+    types = _resolve_scope(question, doc_type)
+    return store.query(question, k=k, where=_where_for(types))
 
 
 def _format_context(hits: list[dict]) -> str:
@@ -81,6 +119,7 @@ def answer_question(
     question: str,
     history: list[dict] | None = None,
     k: int = DEFAULT_K,
+    doc_type: object = DEFAULT_DOC_TYPE,
 ) -> dict:
     """Answer one question with RAG grounding.
 
@@ -94,8 +133,13 @@ def answer_question(
     log.info("question: %s", preview(question, 120))
     log.info("history: %d prior turns", len(history or []))
 
-    # --- 1. RETRIEVE ---
-    hits = retrieve_for_question(question, k=k)
+    # --- 0. ROUTE: decide which document types to search (once) ---
+    log.info("routing (doc_type setting=%r)…", doc_type)
+    types = _resolve_scope(question, doc_type)
+    log.info("scope: %s", types or "ALL types")
+
+    # --- 1. RETRIEVE (pass concrete types so we don't route twice) ---
+    hits = retrieve_for_question(question, k=k, doc_type=types or None)
     if not hits:
         log.warning("no hits — knowledge base empty; returning fallback answer")
         return {

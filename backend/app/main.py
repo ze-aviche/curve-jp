@@ -1,13 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1.endpoints import audit, auth, chat, clients, industry_players, integrations
+from app.api.v1.endpoints import audit, auth, chat, clients, industry_players, integrations, voice
 import app.integrations  # noqa: F401  (registers all connectors on import)
 from app.events.bus import Event, bus
 from app.core.observability import ObservabilityMiddleware, metrics_response
 from app.core import cache
+from app.rag.rag_logging import configure as configure_rag_logging
 from sqlalchemy import text
 from app.core.database import engine
+
+# Attach the rag.* console handler so the full RAG flow (retrieve / augment /
+# generate) is visible in the uvicorn terminal. Without this the rag logger has
+# no handler under uvicorn and its INFO logs are dropped by the root logger.
+configure_rag_logging()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -30,6 +36,7 @@ app.include_router(industry_players.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(integrations.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
+app.include_router(voice.router, prefix="/api/v1")
 
 
 # --- Event-driven wiring ---------------------------------------------------

@@ -1,0 +1,20 @@
+meta {
+  name: Voice Intents
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/voice/intents?use_llm=false
+  auth: none
+}
+
+params:query {
+  use_llm: false
+}
+
+docs {
+  Containment broken down by detected intent.
+  use_llm=false -> fast keyword classifier (instant, no API key).
+  use_llm=true  -> Haiku LLM classifier per call (slower, needs ANTHROPIC_API_KEY).
+}

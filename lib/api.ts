@@ -38,6 +38,25 @@ export const api = {
     list: (category?: string) =>
       req(`/api/v1/industry-players/${category ? `?category=${category}` : ""}`),
   },
+  voice: {
+    analytics: () =>
+      req<{
+        total_calls: number
+        contained_calls: number
+        escalated_calls: number
+        containment_rate: number
+        avg_handle_secs: number
+        agent_minutes_deflected: number
+        estimated_savings_usd: number
+        outcomes: Record<string, number>
+        by_tenant: { tenant: string; total_calls: number; containment_rate: number; avg_handle_secs: number }[]
+      }>("/api/v1/voice/analytics"),
+    intents: (useLlm = false) =>
+      req<{
+        classifier: string
+        by_intent: { intent: string; total_calls: number; containment_rate: number }[]
+      }>(`/api/v1/voice/intents?use_llm=${useLlm}`),
+  },
   chat: {
     ask: (
       question: string,

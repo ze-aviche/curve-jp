@@ -1,0 +1,19 @@
+meta {
+  name: Voice Analytics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/voice/analytics
+  auth: none
+}
+
+docs {
+  IVR containment / deflection KPIs across all ingested voice calls:
+  containment_rate, agent_minutes_deflected, estimated_savings_usd, avg_handle_secs,
+  outcome distribution, and a per-tenant breakdown.
+
+  Reads the voice agent's call store via the VoiceAgentConnector. Returns 503 if the
+  voice DB (VOICE_AGENT_DB_PATH) is unreachable.
+}

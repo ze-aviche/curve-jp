@@ -1,0 +1,37 @@
+meta {
+  name: Voice Call Ingest
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/voice/calls/ingest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "id": "demo-rt-001",
+    "tenant_id": "bright-smile-dental",
+    "outcome": "booked",
+    "duration_secs": 95,
+    "transcript": [
+      { "role": "assistant", "text": "Welcome to Bright Smile Dental, how can I help?" },
+      { "role": "user", "text": "I'd like to book a cleaning for next week." },
+      { "role": "assistant", "text": "Sure — I have Tuesday at 2pm. Shall I book it?" },
+      { "role": "user", "text": "Yes, perfect." }
+    ]
+  }
+}
+
+docs {
+  Real-time (push) ingestion of ONE finished call — what a telephony platform calls
+  at hang-up. Normalizes via the connector adapter, classifies intent, and upserts
+  into the RAG index immediately (no batch sync). Returns { ingested, contained,
+  intent, index_total }.
+}
