@@ -10,9 +10,11 @@ The SSE endpoint is what makes the portal show agents working in real time.
 import json
 from typing import Any, Optional
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
+
+from app.reports.pdf import onboarding_pdf, report_pdf
 
 from app.agents.graph import (
     get_audit_state,
@@ -81,6 +83,31 @@ async def audit_hitl_pending():
 async def audit_hitl_state(thread_id: str):
     """Full saved state for one audit (gaps/solutions) for the review screen."""
     return _serialize(await get_audit_state(thread_id))
+
+
+def _pdf_response(pdf: bytes, filename: str) -> Response:
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/hitl/onboarding/{thread_id}")
+async def audit_onboarding_pdf(thread_id: str):
+    """Download the customer's onboarding submission as a PDF (reference copy)."""
+    data = _serialize(await get_audit_state(thread_id))
+    name = (data.get("client_name") or thread_id[:8]).replace(" ", "_")
+    return _pdf_response(onboarding_pdf(data), f"onboarding_{name}.pdf")
+
+
+@router.get("/hitl/report/{thread_id}")
+async def audit_report_pdf(thread_id: str):
+    """Download the final approved audit report as a PDF."""
+    data = _serialize(await get_audit_state(thread_id))
+    if not data.get("roadmap"):
+        raise HTTPException(status_code=409, detail="Report not ready — audit not yet approved.")
+    name = (data.get("client_name") or thread_id[:8]).replace(" ", "_")
+    return _pdf_response(report_pdf(data), f"audit_report_{name}.pdf")
 
 
 @router.post("/hitl/approve")

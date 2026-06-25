@@ -61,8 +61,18 @@ export const api = {
     }) => req("/api/v1/audit/hitl/start", { method: "POST", body: JSON.stringify(data) }),
     hitlPending: () =>
       req<{
-        pending: { thread_id: string; client_name: string; status: string; gap_count: number; seq: number }[]
+        pending: {
+          thread_id: string
+          client_name: string
+          status: string
+          gap_count: number
+          seq: number
+          platform?: string | null
+          industry?: string | null
+        }[]
       }>("/api/v1/audit/hitl/pending"),
+    onboardingPdfUrl: (threadId: string) => `${BASE}/api/v1/audit/hitl/onboarding/${threadId}`,
+    reportPdfUrl: (threadId: string) => `${BASE}/api/v1/audit/hitl/report/${threadId}`,
     hitlState: (threadId: string) =>
       req<{
         thread_id: string

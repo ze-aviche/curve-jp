@@ -200,6 +200,12 @@ def _registry_conn() -> sqlite3.Connection:
         "thread_id TEXT PRIMARY KEY, client_name TEXT, status TEXT, "
         "gap_count INTEGER, seq INTEGER)"
     )
+    # Lightweight migration for added columns (existing rows get NULL).
+    for col in ("platform TEXT", "industry TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE hitl_registry ADD COLUMN {col}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -247,6 +253,8 @@ async def get_audit_state(thread_id: str) -> dict:
     snap = await graph.aget_state(_config(thread_id))
     return {
         **meta,
+        "client_data": snap.values.get("client_data", {}),
+        "client_context": snap.values.get("client_context", {}),
         "gaps": snap.values.get("gaps", []),
         "solutions": snap.values.get("solutions", []),
         "tool_findings": snap.values.get("tool_findings", ""),
@@ -281,7 +289,11 @@ async def start_audit_hitl(
     status = "awaiting_approval" if snap.next else "complete"
     gap_count = len(snap.values.get("gaps", []))
 
-    _registry_upsert(thread_id, client_name=name, status=status, gap_count=gap_count)
+    _registry_upsert(
+        thread_id, client_name=name, status=status, gap_count=gap_count,
+        platform=client_data.get("platform"),
+        industry=(client_context or {}).get("industry"),
+    )
     log.info("AUDIT PAUSED — thread=%s status=%s, %d gaps WAITING FOR HUMAN APPROVAL "
              "(paused before %s)", thread_id, status, gap_count, list(snap.next))
     return {
