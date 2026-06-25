@@ -28,6 +28,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.core.config import settings
+from app.rag.guardrails import apply_groundedness_guardrail
 from app.rag.rag_logging import get_logger, preview
 from app.rag.router import route_doc_types
 from app.rag.store import get_store
@@ -120,6 +121,7 @@ def answer_question(
     history: list[dict] | None = None,
     k: int = DEFAULT_K,
     doc_type: object = DEFAULT_DOC_TYPE,
+    guardrails: bool = True,
 ) -> dict:
     """Answer one question with RAG grounding.
 
@@ -188,7 +190,20 @@ def answer_question(
     ]
     log.info("sources: %s", ", ".join(f"{s['source']}({s['distance']})" for s in sources))
 
-    return {"answer": answer, "sources": sources, "grounded": True}
+    # --- 4. GUARDRAIL: verify the answer is grounded before returning it ---
+    guardrail_info = None
+    if guardrails:
+        log.info("guardrail: checking groundedness…")
+        gr = apply_groundedness_guardrail(answer, context)
+        answer = gr["answer"]            # possibly replaced with a safe refusal
+        guardrail_info = gr["verdict"] | {"blocked": gr["blocked"]}
+
+    return {
+        "answer": answer,
+        "sources": sources,
+        "grounded": True if guardrail_info is None else not guardrail_info["blocked"],
+        "guardrail": guardrail_info,
+    }
 
 
 def _repl() -> None:

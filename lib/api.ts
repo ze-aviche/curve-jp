@@ -67,6 +67,7 @@ export const api = {
         answer: string
         sources: { source: string; distance: number }[]
         grounded: boolean
+        guardrail: { score?: number; blocked?: boolean; grounded?: boolean; reason?: string } | null
       }>("/api/v1/chat", {
         method: "POST",
         body: JSON.stringify({ question, history, k }),

@@ -1,0 +1,20 @@
+[
+  {
+    "question": "How many days per week can employees work from home?",
+    "expected_sources": ["remote"],
+    "expected_answer": "Employees may work from home up to three days per week.",
+    "expect_refusal": false
+  },
+  {
+    "question": "Are contact center agents required to log their handle time?",
+    "expected_sources": ["policy"],
+    "expected_answer": "Yes, agents must log handle time daily.",
+    "expect_refusal": false
+  },
+  {
+    "question": "What is the company's policy on booking a holiday to the moon?",
+    "expected_sources": [],
+    "expected_answer": "",
+    "expect_refusal": true
+  }
+]

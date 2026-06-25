@@ -38,6 +38,7 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[ChatSource]
     grounded: bool
+    guardrail: Optional[dict] = None  # {grounded, score, unsupported_claims, reason, blocked}
 
 
 @router.post("", response_model=ChatResponse)

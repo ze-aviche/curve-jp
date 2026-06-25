@@ -1,16 +1,18 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Send, MessageSquare, FileText, Loader2 } from "lucide-react"
+import { Send, MessageSquare, FileText, Loader2, ShieldCheck, ShieldAlert } from "lucide-react"
 import CustomerSidebar from "@/components/customer-sidebar"
 import { api } from "@/lib/api"
 
 type Source = { source: string; distance: number }
+type Guardrail = { score?: number; blocked?: boolean; grounded?: boolean } | null
 type Msg = {
   role: "user" | "assistant"
   content: string
   sources?: Source[]
   grounded?: boolean
+  guardrail?: Guardrail
 }
 
 const SUGGESTIONS = [
@@ -45,7 +47,13 @@ export default function ChatPage() {
       const res = await api.chat.ask(q, history)
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: res.answer, sources: res.sources, grounded: res.grounded },
+        {
+          role: "assistant",
+          content: res.answer,
+          sources: res.sources,
+          grounded: res.grounded,
+          guardrail: res.guardrail as Guardrail,
+        },
       ])
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed")
@@ -104,6 +112,25 @@ export default function ChatPage() {
                   }`}
                 >
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.content}</p>
+
+                  {m.role === "assistant" && m.guardrail && (
+                    <div className="mt-2.5">
+                      {m.guardrail.blocked ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-md px-2 py-1">
+                          <ShieldAlert className="w-3 h-3" />
+                          Guardrail: blocked ungrounded answer
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md px-2 py-1">
+                          <ShieldCheck className="w-3 h-3" />
+                          Grounded
+                          {typeof m.guardrail.score === "number"
+                            ? ` (${Math.round(m.guardrail.score * 100)}%)`
+                            : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {m.role === "assistant" && m.sources && m.sources.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-slate-100">

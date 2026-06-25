@@ -1,0 +1,20 @@
+meta {
+  name: Eval Run
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/eval/run
+  body: none
+  auth: none
+}
+
+docs {
+  Runs the RAG golden-set evaluation (data/eval/golden.json) through the full
+  production path: routing -> retrieval -> generation -> guardrail.
+
+  Returns summary { retrieval_hit_rate, mean_groundedness, correctness_rate } plus
+  per-case results. Makes several LLM calls (needs ANTHROPIC_API_KEY) so it can take
+  a few seconds. The quality gate you'd show an enterprise customer.
+}
