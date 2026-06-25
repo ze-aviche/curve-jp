@@ -16,3 +16,4 @@ Format: lightweight [MADR](https://adr.github.io/madr/)-style. Template: [`0000-
 | [0005](0005-event-driven-pluggable-transport.md) | Event-driven core with pluggable transport | Accepted |
 | [0006](0006-stateless-tiers-derived-rag-index.md) | Stateless tiers; RAG index as derived data | Accepted |
 | [0007](0007-voice-ai-separate-project-bridge.md) | Voice AI as a separate project + voice→RAG bridge | Accepted |
+| [0008](0008-koreai-xo-platform-mapping.md) | Mapping the LangGraph platform to Kore.ai XO concepts | Accepted |

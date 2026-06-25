@@ -15,9 +15,10 @@ the original research_agent.py relied on.
 from __future__ import annotations
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from app.core.config import settings
+from app.rag.rag_logging import get_logger
 from app.rag.retrieve import retrieve_context
 from app.agents.state import (
     AuditState,
@@ -26,6 +27,9 @@ from app.agents.state import (
     Roadmap,
     SolutionDesignSet,
 )
+from app.agents.tools import TOOLS, TOOL_MAP
+
+log = get_logger("agents")
 
 MODEL = "claude-sonnet-4-6"
 
@@ -123,6 +127,65 @@ Produce at least 15 gaps across all 8 categories, sorted by estimated_annual_roi
     return {
         "gaps": gaps,
         "completed": state.get("completed", []) + ["gap_agent"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Node 2.5 — TOOL-CALLING AGENT (ReAct loop)
+# Unlike the other nodes (single structured LLM call), this one is a true *agent*:
+# it binds tools, and loops think -> call tool -> observe -> think until it has
+# what it needs, then summarizes. It validates the top gaps' ROI by looking up
+# benchmarks and computing savings with real functions instead of guessing.
+# ---------------------------------------------------------------------------
+TOOL_AGENT_SYSTEM = """You are a contact-center ROI validation agent. You have tools to \
+look up metric benchmarks, estimate annual savings, and search the knowledge base. For the \
+client's weakest metrics and the top gaps, CALL the tools to ground your numbers — do not \
+guess. Then give a short validated-ROI summary citing the figures the tools returned."""
+
+MAX_TOOL_ITERS = 5
+
+
+async def tool_agent_node(state: AuditState) -> AuditState:
+    cd = state["client_data"]
+    top_gaps = state.get("gaps", [])[:3]
+    gaps_txt = "; ".join(f"{g.feature_name} ({g.category})" for g in top_gaps) or "n/a"
+
+    llm = _llm().bind_tools(TOOLS)
+    messages: list = [
+        SystemMessage(content=TOOL_AGENT_SYSTEM),
+        HumanMessage(content=f"""Client metrics: FCR={cd.get('fcr_pct','?')}%, \
+AHT={cd.get('aht_seconds','?')}s, IVR deflection={cd.get('ivr_deflection_pct','?')}%, \
+CSAT={cd.get('csat_pct','?')}%, attrition={cd.get('attrition_pct','?')}%, \
+monthly_calls={cd.get('monthly_calls', 50000)}.
+Top gaps to validate: {gaps_txt}.
+Validate the ROI of closing these gaps using the tools."""),
+    ]
+
+    calls_made: list[dict] = []
+    final_text = ""
+    for _ in range(MAX_TOOL_ITERS):
+        ai = await llm.ainvoke(messages)
+        messages.append(ai)
+        tool_calls = getattr(ai, "tool_calls", None) or []
+        if not tool_calls:
+            final_text = ai.content if isinstance(ai.content, str) else str(ai.content)
+            break
+        # Execute each requested tool and feed the observation back to the model.
+        for tc in tool_calls:
+            name, args = tc["name"], tc.get("args", {})
+            log.info("tool_agent -> %s(%s)", name, args)
+            calls_made.append({"tool": name, "args": args})
+            try:
+                observation = TOOL_MAP[name].invoke(args)
+            except Exception as e:  # a bad tool call shouldn't kill the agent
+                observation = f"tool error: {e}"
+            messages.append(ToolMessage(content=str(observation), tool_call_id=tc["id"]))
+
+    log.info("tool_agent done — %d tool calls", len(calls_made))
+    return {
+        "tool_findings": final_text,
+        "tool_calls_made": calls_made,
+        "completed": state.get("completed", []) + ["tool_agent"],
     }
 
 

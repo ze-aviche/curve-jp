@@ -14,7 +14,12 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.agents.graph import run_audit, stream_audit
+from app.agents.graph import (
+    resume_audit_hitl,
+    run_audit,
+    start_audit_hitl,
+    stream_audit,
+)
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -22,6 +27,16 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 class AuditRequest(BaseModel):
     client_data: dict[str, Any]
     client_context: Optional[dict[str, Any]] = None
+
+
+class HitlStartRequest(AuditRequest):
+    thread_id: str
+
+
+class HitlApproveRequest(BaseModel):
+    thread_id: str
+    approved: bool = True
+    drop_gaps: list[str] = []
 
 
 def _serialize(update: Any) -> Any:
@@ -39,6 +54,23 @@ def _serialize(update: Any) -> Any:
 async def audit_run(req: AuditRequest):
     final = await run_audit(req.client_data, req.client_context)
     return _serialize(final)
+
+
+@router.post("/hitl/start")
+async def audit_hitl_start(req: HitlStartRequest):
+    """Start an audit that PAUSES for human approval before the roadmap.
+
+    Returns the gaps/solutions awaiting sign-off. Resume with /audit/hitl/approve.
+    """
+    result = await start_audit_hitl(req.thread_id, req.client_data, req.client_context)
+    return _serialize(result)
+
+
+@router.post("/hitl/approve")
+async def audit_hitl_approve(req: HitlApproveRequest):
+    """Approve (optionally editing gaps) or reject a paused audit; resumes to the roadmap."""
+    result = await resume_audit_hitl(req.thread_id, approved=req.approved, drop_gaps=req.drop_gaps)
+    return _serialize(result)
 
 
 @router.post("/stream")

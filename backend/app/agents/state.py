@@ -110,7 +110,14 @@ class AuditState(TypedDict, total=False):
     solutions: list[SolutionDesign]
     roadmap: Roadmap
 
+    # --- tool-calling agent (ReAct) output ---
+    tool_findings: str               # ROI validation summary from the tool agent
+    tool_calls_made: list[dict]      # which tools it called, with args (observability)
+
     # --- supervisor bookkeeping ---
     next: str                        # which node the supervisor routes to next
     completed: list[str]             # node names already run
     token_usage: dict[str, int]      # rough accounting across the pipeline
+
+    # --- human-in-the-loop ---
+    human_approved: bool             # set when a reviewer approves before the roadmap
