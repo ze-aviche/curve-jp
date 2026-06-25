@@ -81,22 +81,43 @@ A **supervisor graph**. The supervisor inspects `state["completed"]` and routes 
 next specialist until done. Adding an agent = one routing-table entry.
 
 ```
-START → supervisor ⇄ { retrieval → research → gap → solution → roadmap } → END
+START → supervisor ⇄ { retrieval → research → gap → tool → solution → [HITL pause] → roadmap } → END
 ```
 
-| Node | Type | Does |
-|---|---|---|
-| `retrieval_agent` | retrieval (no LLM) | RAG: pulls benchmark/transcript chunks into `retrieved_context` |
-| `research_agent` | LLM (structured) | Scores 8 framework categories (`ResearchReport`) |
-| `gap_agent` | LLM (structured) | Quantified, ROI-sorted gaps (`GapList`) |
-| `solution_agent` | LLM (structured) | Per-gap architecture designs (top 5) |
-| `roadmap_agent` | LLM (structured) | Phased, ROI-maximizing roadmap |
+| Node | Type | Model | Does |
+|---|---|---|---|
+| `retrieval_agent` | retrieval (no LLM) | — | RAG: pulls benchmark/transcript chunks into `retrieved_context` |
+| `research_agent` | LLM (structured) | Haiku | Scores 8 framework categories — **parallel map-reduce** (`ResearchReport`) |
+| `gap_agent` | LLM (structured) | Sonnet | Quantified, ROI-sorted gaps (`GapList`) |
+| `tool_agent` | LLM (tools / ReAct) | Haiku | Validates top-gap ROI by calling tools (`tool_findings`) |
+| `solution_agent` | LLM (structured) | Sonnet | Per-gap architecture designs (top 3) |
+| `roadmap_agent` | LLM (structured) | Sonnet | Phased, ROI-maximizing roadmap (runs AFTER human approval) |
 
 - **State**: `app/agents/state.py` — `AuditState` TypedDict; nodes return partial updates.
 - **Structured outputs**: `ChatAnthropic.with_structured_output(PydanticModel)` (tool-calling),
   not JSON-string parsing.
 - **Streaming**: `stream_audit()` uses `astream(stream_mode="updates")` → SSE in `audit.py`.
 - **Gotcha**: node ids must NOT collide with state keys → nodes are suffixed `_agent`.
+
+### Agent-platform features (the parts that make it a platform, not a chain)
+- **Tool-calling agent** (`app/agents/tools.py` + `tool_agent_node`): a ReAct loop that
+  `bind_tools(...)` and calls `lookup_benchmark` / `estimate_annual_savings` / `search_knowledge`
+  to ground ROI numbers, then summarizes. Tool calls recorded in `state["tool_calls_made"]`.
+- **Parallel research (map-reduce)**: `research_node` fans out **8 concurrent per-category calls**
+  via `asyncio.gather` (each a small `CategoryAssessment`), then reduces to a `ResearchReport`.
+  Wall-clock ≈ slowest category, not the sum; `return_exceptions=True` so one failed category
+  degrades gracefully instead of failing the node. `CATEGORIES` is the category list.
+- **Model strategy**: `MODEL`=Sonnet (gap/solution/roadmap — numeric/nested-schema reliability),
+  `FAST_MODEL`=Haiku (research/tool — speed). `_structured(...)` is a resilience wrapper:
+  retries the chosen model, escalates Haiku→Sonnet on failure, and takes a `max_tokens` sized to
+  the output (big lists use 8192 to avoid truncation that parses as an empty `{}`).
+- **Human-in-the-loop**: `hitl_graph` compiles with `interrupt_before=["roadmap_agent"]` + a
+  **durable AsyncSqliteSaver** checkpointer (`data/agent_checkpoints.sqlite`) — a paused audit
+  survives a restart and resumes. `start_audit_hitl` runs to the pause; `resume_audit_hitl`
+  applies the reviewer's edits via `aupdate_state` then finishes. Built lazily (`_get_hitl_graph`)
+  since the async saver needs an event loop. The approval queue is a `hitl_registry` table in the
+  same SQLite file (survives restart). Endpoints: `POST /audit/hitl/start`, `GET /audit/hitl/pending`,
+  `GET /audit/hitl/state/{id}`, `POST /audit/hitl/approve`.
 
 Run: `python -m scripts.run_audit_demo` (needs `ANTHROPIC_API_KEY`).
 

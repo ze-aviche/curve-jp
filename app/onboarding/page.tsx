@@ -7,6 +7,7 @@ import { TrendingUp, CheckCircle2, ArrowRight, ArrowLeft, Upload, ShieldCheck, C
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { api } from "@/lib/api"
 
 const STEPS = [
   { label: "Company Profile", desc: "Tell us about your organization" },
@@ -23,17 +24,20 @@ const selectCls = "w-full h-12 border border-slate-200 text-slate-700 rounded-xl
 const checkCardCls = "flex items-center gap-3 text-base text-slate-700 cursor-pointer p-4 rounded-xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
 const checkSmCls = "flex items-center gap-3 text-sm text-slate-700 cursor-pointer p-3.5 rounded-xl border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
 
-function Step0() {
+type StepProps = { form: Record<string, string>; set: (k: string, v: string) => void }
+
+function Step0({ form, set }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-5">
         <div className="col-span-2 sm:col-span-1">
           <label className={labelCls}>Company Name <span className="text-blue-600">*</span></label>
-          <Input placeholder="Acme Corporation" className={inputCls} />
+          <Input placeholder="Acme Corporation" className={inputCls}
+            value={form.company ?? ""} onChange={(e) => set("company", e.target.value)} />
         </div>
         <div className="col-span-2 sm:col-span-1">
           <label className={labelCls}>Industry <span className="text-blue-600">*</span></label>
-          <select className={selectCls}>
+          <select className={selectCls} value={form.industry ?? ""} onChange={(e) => set("industry", e.target.value)}>
             <option value="">Select your industry</option>
             {["Financial Services", "Insurance", "Healthcare", "Retail / E-commerce", "Telecom", "Technology", "Government", "Utilities", "Travel & Hospitality", "Other"].map(i => (
               <option key={i}>{i}</option>
@@ -72,13 +76,14 @@ function Step0() {
           placeholder="Describe your business and what your contact center supports..."
           className="text-base border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl resize-none focus:border-blue-500"
           rows={4}
+          value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)}
         />
       </div>
     </div>
   )
 }
 
-function Step1() {
+function Step1({ form, set }: StepProps) {
   return (
     <div className="space-y-7">
       <div>
@@ -86,7 +91,8 @@ function Step1() {
         <div className="grid grid-cols-2 gap-3">
           {["Genesys Cloud CX", "Amazon Connect", "Five9", "NICE CXone", "Talkdesk", "Twilio Flex", "Avaya OneCloud", "Cisco Webex CC", "RingCentral CC", "Other"].map(p => (
             <label key={p} className={checkCardCls}>
-              <input type="radio" name="platform" value={p} className="accent-blue-600 w-4 h-4 shrink-0" />
+              <input type="radio" name="platform" value={p} className="accent-blue-600 w-4 h-4 shrink-0"
+                checked={form.platform === p} onChange={(e) => set("platform", e.target.value)} />
               <span className="font-medium">{p}</span>
             </label>
           ))}
@@ -129,7 +135,7 @@ function Step1() {
   )
 }
 
-function Step2() {
+function Step2({ form, set }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
@@ -137,18 +143,19 @@ function Step2() {
       </div>
       <div className="grid grid-cols-2 gap-5">
         {[
-          { label: "Total Agents (FTE)", placeholder: "e.g. 150" },
-          { label: "Monthly Call Volume", placeholder: "e.g. 50,000" },
-          { label: "Avg Handle Time (seconds)", placeholder: "e.g. 320" },
-          { label: "First Contact Resolution %", placeholder: "e.g. 72" },
-          { label: "IVR Deflection Rate %", placeholder: "e.g. 22" },
-          { label: "CSAT Score %", placeholder: "e.g. 81" },
-          { label: "Agent Attrition Rate %", placeholder: "e.g. 28" },
-          { label: "Cost Per Call ($)", placeholder: "e.g. 8.50" },
+          { key: "agent_count", label: "Total Agents (FTE)", placeholder: "e.g. 150" },
+          { key: "monthly_calls", label: "Monthly Call Volume", placeholder: "e.g. 50,000" },
+          { key: "aht_seconds", label: "Avg Handle Time (seconds)", placeholder: "e.g. 320" },
+          { key: "fcr_pct", label: "First Contact Resolution %", placeholder: "e.g. 72" },
+          { key: "ivr_deflection_pct", label: "IVR Deflection Rate %", placeholder: "e.g. 22" },
+          { key: "csat_pct", label: "CSAT Score %", placeholder: "e.g. 81" },
+          { key: "attrition_pct", label: "Agent Attrition Rate %", placeholder: "e.g. 28" },
+          { key: "cost_per_call", label: "Cost Per Call ($)", placeholder: "e.g. 8.50" },
         ].map(f => (
-          <div key={f.label}>
+          <div key={f.key}>
             <label className={labelCls}>{f.label}</label>
-            <Input placeholder={f.placeholder} className={inputCls} />
+            <Input placeholder={f.placeholder} className={inputCls}
+              value={form[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
           </div>
         ))}
       </div>
@@ -331,13 +338,57 @@ function Step5() {
   )
 }
 
-const stepComponents = [Step0, Step1, Step2, Step3, Step4, Step5]
+const stepComponents: ((p: StepProps) => React.JSX.Element)[] = [Step0, Step1, Step2, Step3, Step4, Step5]
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
   const StepComp = stepComponents[step]
   const isLast = step === STEPS.length - 1
+
+  // Parse a possibly-comma-formatted number field, falling back to a default.
+  const num = (k: string, fallback: number) => {
+    const raw = (form[k] ?? "").replace(/[,$\s]/g, "")
+    const n = parseFloat(raw)
+    return Number.isFinite(n) ? n : fallback
+  }
+
+  function handleSubmit() {
+    // Kick off the audit asynchronously — it runs the agent pipeline and then
+    // PAUSES for an internal analyst to approve (HITL) in /admin/approvals before
+    // the customer's roadmap is generated. We don't block the UI on the ~30s run.
+    const threadId = globalThis.crypto?.randomUUID?.() ?? `audit-${Date.now()}`
+    const company = form.company?.trim() || `Onboarding ${threadId.slice(0, 8)}`
+    api.audit
+      .hitlStart({
+        thread_id: threadId,
+        client_name: company,
+        // Real values from the wizard, with sensible fallbacks for blanks.
+        client_data: {
+          company,
+          platform: form.platform || "Genesys Cloud CX",
+          agent_count: num("agent_count", 150),
+          monthly_calls: num("monthly_calls", 50000),
+          aht_seconds: num("aht_seconds", 320),
+          fcr_pct: num("fcr_pct", 72),
+          ivr_deflection_pct: num("ivr_deflection_pct", 22),
+          csat_pct: num("csat_pct", 81),
+          attrition_pct: num("attrition_pct", 28),
+          config_notes: form.notes || "",
+        },
+        client_context: {
+          industry: form.industry || "Financial Services",
+          cost_per_call: num("cost_per_call", 8.5),
+          company,
+        },
+      })
+      .catch(() => {
+        /* fire-and-forget; the analyst queue will simply not show a failed run */
+      })
+    setDone(true)
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -434,7 +485,7 @@ export default function OnboardingPage() {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <StepComp />
+                  <StepComp form={form} set={set} />
                 </motion.div>
               </AnimatePresence>
 
@@ -449,7 +500,7 @@ export default function OnboardingPage() {
                   <ArrowLeft className="w-5 h-5" />Back
                 </Button>
                 <Button
-                  onClick={() => isLast ? setDone(true) : setStep(s => s + 1)}
+                  onClick={() => isLast ? handleSubmit() : setStep(s => s + 1)}
                   className="bg-[#0a1628] hover:bg-[#0a1628]/90 text-white text-base px-8 py-3 h-auto rounded-xl gap-2 shadow-md"
                 >
                   {isLast ? "Submit & Start Audit" : "Continue"}

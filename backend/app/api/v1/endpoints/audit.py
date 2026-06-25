@@ -15,6 +15,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.agents.graph import (
+    get_audit_state,
+    list_pending_audits,
     resume_audit_hitl,
     run_audit,
     start_audit_hitl,
@@ -31,6 +33,7 @@ class AuditRequest(BaseModel):
 
 class HitlStartRequest(AuditRequest):
     thread_id: str
+    client_name: Optional[str] = None
 
 
 class HitlApproveRequest(BaseModel):
@@ -62,8 +65,22 @@ async def audit_hitl_start(req: HitlStartRequest):
 
     Returns the gaps/solutions awaiting sign-off. Resume with /audit/hitl/approve.
     """
-    result = await start_audit_hitl(req.thread_id, req.client_data, req.client_context)
+    result = await start_audit_hitl(
+        req.thread_id, req.client_data, req.client_context, client_name=req.client_name
+    )
     return _serialize(result)
+
+
+@router.get("/hitl/pending")
+async def audit_hitl_pending():
+    """Admin approval queue — audits paused awaiting human sign-off."""
+    return {"pending": list_pending_audits()}
+
+
+@router.get("/hitl/state/{thread_id}")
+async def audit_hitl_state(thread_id: str):
+    """Full saved state for one audit (gaps/solutions) for the review screen."""
+    return _serialize(await get_audit_state(thread_id))
 
 
 @router.post("/hitl/approve")

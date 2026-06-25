@@ -27,6 +27,15 @@ LATENCY = Histogram(
     "http_request_duration_seconds", "Request latency", ["method", "path"]
 )
 
+# High-frequency poll/probe endpoints — still measured in metrics, but NOT printed
+# per-request so they don't drown the console (the approval queue polls /pending).
+QUIET_PATHS = {
+    "/api/v1/audit/hitl/pending",
+    "/health",
+    "/ready",
+    "/metrics",
+}
+
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -51,8 +60,9 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         REQUESTS.labels(request.method, path_label, status).inc()
         response.headers["x-request-id"] = request_id
         response.headers["x-response-time-ms"] = f"{elapsed * 1000:.1f}"
-        print(f'[req] id={request_id} {request.method} {request.url.path} '
-              f'-> {status} {elapsed * 1000:.1f}ms')
+        if request.url.path not in QUIET_PATHS:
+            print(f'[req] id={request_id} {request.method} {request.url.path} '
+                  f'-> {status} {elapsed * 1000:.1f}ms')
         return response
 
 

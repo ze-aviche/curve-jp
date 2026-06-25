@@ -14,6 +14,8 @@ the original research_agent.py relied on.
 """
 from __future__ import annotations
 
+import asyncio
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
@@ -22,6 +24,7 @@ from app.rag.rag_logging import get_logger
 from app.rag.retrieve import retrieve_context
 from app.agents.state import (
     AuditState,
+    CategoryAssessment,
     GapList,
     ResearchReport,
     Roadmap,
@@ -31,17 +34,43 @@ from app.agents.tools import TOOLS, TOOL_MAP
 
 log = get_logger("agents")
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-4-6"            # deep reasoning (final roadmap)
+FAST_MODEL = "claude-haiku-4-5-20251001"  # fast generation (bulk structured output)
 
 
-def _llm(temperature: float = 0.0) -> ChatAnthropic:
+def _llm(temperature: float = 0.0, model: str = MODEL, max_tokens: int = 4096) -> ChatAnthropic:
     """Factory so every node shares one consistent model config."""
     return ChatAnthropic(
-        model=MODEL,
+        model=model,
         temperature=temperature,
-        max_tokens=8192,
+        max_tokens=max_tokens,
         api_key=settings.ANTHROPIC_API_KEY,
     )
+
+
+async def _structured(messages, schema, *, temperature: float = 0.0,
+                      model: str = MODEL, max_tokens: int = 4096, label: str = ""):
+    """Invoke a structured-output LLM with retry + model escalation.
+
+    Structured output via tool-calling can fail two ways: a transient empty/invalid
+    tool-call, or truncation when the output exceeds max_tokens (the JSON gets cut and
+    parses as `{}`). We retry the chosen model (handles transient flakes) and, if it's
+    a fast model, escalate to Sonnet as a last resort — so one bad parse never 500s the
+    whole audit. Callers size `max_tokens` to their output (big lists need more).
+    """
+    # Retry the same model twice; if starting on a fast model, escalate to Sonnet last.
+    attempts = [model, model] if model == MODEL else [model, model, MODEL]
+    last_err: Exception | None = None
+    for i, m in enumerate(attempts):
+        try:
+            llm = _llm(temperature=temperature, model=m, max_tokens=max_tokens
+                       ).with_structured_output(schema)
+            return await llm.ainvoke(messages)
+        except Exception as e:  # parse/validation/transient API error
+            last_err = e
+            log.warning("structured output failed on %s for %s (attempt %d/%d): %s",
+                        m, label, i + 1, len(attempts), e)
+    raise last_err  # all attempts failed
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +80,7 @@ def _llm(temperature: float = 0.0) -> ChatAnthropic:
 # node already injects into its prompt. No LLM call here — pure retrieval.
 # ---------------------------------------------------------------------------
 async def retrieval_node(state: AuditState) -> AuditState:
+    log.info("NODE retrieval_agent — RAG: pulling reference context")
     context = retrieve_context(state["client_data"], k=5)
     return {
         "retrieved_context": context,
@@ -59,39 +89,86 @@ async def retrieval_node(state: AuditState) -> AuditState:
 
 
 # ---------------------------------------------------------------------------
-# Node 1 — RESEARCH
+# Node 1 — RESEARCH (parallel map-reduce over the 8 framework categories)
 # ---------------------------------------------------------------------------
-RESEARCH_SYSTEM = """You are an expert contact center technology auditor with 18+ years \
-of experience auditing platforms (Genesys, Amazon Connect, Five9, NICE, Talkdesk) against \
-a 100-feature best-practice framework with 8 categories:
-1. Inbound Call Handling  2. Compliance & Risk  3. Analytics & Insights
-4. Integration & Data  5. Automation & AI  6. Customer Experience
-7. Agent Experience  8. Business Operations
-Identify what's present, missing, or partial. Cite evidence from the data. Quantify where possible."""
+# The 8 framework categories — each scored by its own concurrent agent call.
+CATEGORIES = [
+    "Inbound Call Handling",
+    "Compliance & Risk",
+    "Analytics & Insights",
+    "Integration & Data",
+    "Automation & AI",
+    "Customer Experience",
+    "Agent Experience",
+    "Business Operations",
+]
+
+CATEGORY_SYSTEM = """You are an expert contact center technology auditor (18+ years across \
+Genesys, Amazon Connect, Five9, NICE, Talkdesk). Assess ONE category of a best-practice framework \
+for this contact center. Identify the current state (cite evidence from the data), the key gaps, a \
+maturity score 0-100, and the top 3 improvement opportunities. Be specific and quantify where possible."""
 
 
-async def research_node(state: AuditState) -> AuditState:
-    cd = state["client_data"]
-    # RAG hook: any retrieved transcript/benchmark context is injected here.
-    rag = "\n".join(state.get("retrieved_context", []))
-    rag_block = f"\n\nRetrieved reference context:\n{rag}" if rag else ""
-
-    llm = _llm().with_structured_output(ResearchReport)
-    report: ResearchReport = await llm.ainvoke([
-        SystemMessage(content=RESEARCH_SYSTEM),
-        HumanMessage(content=f"""Assess this contact center's current state.
-
-Platform: {cd.get('platform', 'Unknown')}
+def _client_block(cd: dict, rag_block: str) -> str:
+    return f"""Platform: {cd.get('platform', 'Unknown')}
 Agent Count: {cd.get('agent_count', 'Unknown')}
 Metrics: AHT={cd.get('aht_seconds', '?')}s, FCR={cd.get('fcr_pct', '?')}%, \
 IVR Deflection={cd.get('ivr_deflection_pct', '?')}%, CSAT={cd.get('csat_pct', '?')}%, \
 Attrition={cd.get('attrition_pct', '?')}%, Monthly Calls={cd.get('monthly_calls', '?')}
 Config Notes: {cd.get('config_notes', 'Not provided')}
-Integrations: {cd.get('integrations', [])}{rag_block}
+Integrations: {cd.get('integrations', [])}{rag_block}"""
 
-Score all 8 categories with current state, key gaps, score (0-100), and top 3 opportunities."""),
-    ])
 
+async def _assess_category(category: str, cd: dict, rag_block: str) -> CategoryAssessment:
+    """Score a SINGLE framework category (one focused, fast LLM call)."""
+    result: CategoryAssessment = await _structured([
+        SystemMessage(content=CATEGORY_SYSTEM),
+        HumanMessage(content=f"""Assess ONLY this category: {category}
+
+{_client_block(cd, rag_block)}
+
+Return the assessment for the "{category}" category."""),
+    ], CategoryAssessment, model=FAST_MODEL, max_tokens=2048, label=f"research:{category}")
+    result.category = category  # pin the name so the report is consistent
+    return result
+
+
+async def research_node(state: AuditState) -> AuditState:
+    # PARALLEL MAP-REDUCE: instead of one big call scoring all 8 categories (slow,
+    # truncation-prone), we fan out 8 focused calls concurrently and join the results.
+    # Wall-clock ≈ the slowest single category, not the sum — and each call is small,
+    # so it's both faster and more reliable. One category failing degrades gracefully.
+    log.info("NODE research_agent — assessing %d categories IN PARALLEL (%s)",
+             len(CATEGORIES), FAST_MODEL)
+    cd = state["client_data"]
+    rag = "\n".join(state.get("retrieved_context", []))
+    rag_block = f"\n\nRetrieved reference context:\n{rag}" if rag else ""
+
+    results = await asyncio.gather(
+        *[_assess_category(c, cd, rag_block) for c in CATEGORIES],
+        return_exceptions=True,
+    )
+    categories = [r for r in results if isinstance(r, CategoryAssessment)]
+    failed = [c for c, r in zip(CATEGORIES, results) if not isinstance(r, CategoryAssessment)]
+    if failed:
+        log.warning("research: %d categories failed, continuing with %d: %s",
+                    len(failed), len(categories), failed)
+
+    # REDUCE: synthesize a deterministic overall summary (no extra LLM call).
+    avg = sum(c.score for c in categories) / len(categories) if categories else 0
+    weakest = sorted(categories, key=lambda c: c.score)[:3]
+    overall = (
+        f"Assessed {len(categories)} of {len(CATEGORIES)} framework categories; "
+        f"average maturity {avg:.0f}/100. Weakest areas: "
+        f"{', '.join(c.category for c in weakest) or 'n/a'}."
+    )
+    report = ResearchReport(
+        platform=cd.get("platform", "Unknown"),
+        overall_summary=overall,
+        categories=categories,
+    )
+    log.info("NODE research_agent done — %d/%d categories scored (parallel, avg %.0f/100)",
+             len(categories), len(CATEGORIES), avg)
     return {
         "research": report,
         "completed": state.get("completed", []) + ["research_agent"],
@@ -108,11 +185,12 @@ Use the client's real metrics to compute dollar impacts. Prioritize by ROI."""
 
 
 async def gap_analysis_node(state: AuditState) -> AuditState:
+    log.info("NODE gap_agent — quantifying ROI-ranked gaps (%s)", MODEL)
     report: ResearchReport = state["research"]
     ctx = state.get("client_context", {})
 
-    llm = _llm().with_structured_output(GapList)
-    result: GapList = await llm.ainvoke([
+    # Sonnet here: the dollar/ROI math must be reliable (Haiku produced bad figures).
+    result: GapList = await _structured([
         SystemMessage(content=GAP_SYSTEM),
         HumanMessage(content=f"""Research findings:
 {report.model_dump_json(indent=2)}
@@ -120,10 +198,12 @@ async def gap_analysis_node(state: AuditState) -> AuditState:
 Client context: industry={ctx.get('industry')}, agents={ctx.get('agent_count')}, \
 monthly_calls={ctx.get('monthly_calls')}, cost_per_call=${ctx.get('cost_per_call', 8.50)}
 
-Produce at least 15 gaps across all 8 categories, sorted by estimated_annual_roi descending."""),
-    ])
+Produce 6 high-impact gaps across the most relevant categories, sorted by estimated_annual_roi descending."""),
+    ], GapList, model=MODEL, max_tokens=8192, label="gap")
 
     gaps = sorted(result.gaps, key=lambda g: g.estimated_annual_roi, reverse=True)
+    top_roi = f"${gaps[0].estimated_annual_roi:,.0f}" if gaps else "$0"
+    log.info("NODE gap_agent done — %d gaps, top ROI ~%s", len(gaps), top_roi)
     return {
         "gaps": gaps,
         "completed": state.get("completed", []) + ["gap_agent"],
@@ -138,19 +218,21 @@ Produce at least 15 gaps across all 8 categories, sorted by estimated_annual_roi
 # benchmarks and computing savings with real functions instead of guessing.
 # ---------------------------------------------------------------------------
 TOOL_AGENT_SYSTEM = """You are a contact-center ROI validation agent. You have tools to \
-look up metric benchmarks, estimate annual savings, and search the knowledge base. For the \
-client's weakest metrics and the top gaps, CALL the tools to ground your numbers — do not \
-guess. Then give a short validated-ROI summary citing the figures the tools returned."""
+look up metric benchmarks, estimate annual savings, and search the knowledge base. Validate \
+ONLY the top 2-3 gaps with a FEW targeted tool calls — do not look up every metric or search \
+repeatedly. Then give a short validated-ROI summary citing the figures the tools returned. \
+Be efficient: prefer the fewest tool calls that ground the top gaps."""
 
-MAX_TOOL_ITERS = 5
+MAX_TOOL_ITERS = 3
 
 
 async def tool_agent_node(state: AuditState) -> AuditState:
+    log.info("NODE tool_agent — ReAct loop validating ROI via tools (%s)", FAST_MODEL)
     cd = state["client_data"]
     top_gaps = state.get("gaps", [])[:3]
     gaps_txt = "; ".join(f"{g.feature_name} ({g.category})" for g in top_gaps) or "n/a"
 
-    llm = _llm().bind_tools(TOOLS)
+    llm = _llm(model=FAST_MODEL).bind_tools(TOOLS)
     messages: list = [
         SystemMessage(content=TOOL_AGENT_SYSTEM),
         HumanMessage(content=f"""Client metrics: FCR={cd.get('fcr_pct','?')}%, \
@@ -200,10 +282,12 @@ buildable solution: end-to-end architecture, which vendor platforms/products to 
 integrate (CRM, telephony/SIP, data warehouse), implementation steps, risks, and measurable success \
 metrics. Be specific about products (e.g. Genesys, Amazon Connect, Deepgram, Salesforce)."""
 
-TOP_N_SOLUTIONS = 5
+TOP_N_SOLUTIONS = 3
 
 
 async def solution_design_node(state: AuditState) -> AuditState:
+    log.info("NODE solution_agent — designing architectures for top %d gaps (%s)",
+             TOP_N_SOLUTIONS, MODEL)
     top_gaps = state["gaps"][:TOP_N_SOLUTIONS]
     gaps_block = "\n\n".join(
         f"GAP: {g.feature_name} [{g.category}, {g.severity}]\n"
@@ -212,15 +296,15 @@ async def solution_design_node(state: AuditState) -> AuditState:
         for g in top_gaps
     )
 
-    llm = _llm(temperature=0.2).with_structured_output(SolutionDesignSet)
-    result: SolutionDesignSet = await llm.ainvoke([
+    # Sonnet here: nested SolutionDesignSet schema — Haiku failed to emit valid output.
+    result: SolutionDesignSet = await _structured([
         SystemMessage(content=SOLUTION_SYSTEM),
         HumanMessage(content=f"""Design solutions for these top {len(top_gaps)} gaps:
 
 {gaps_block}
 
 Return one design per gap."""),
-    ])
+    ], SolutionDesignSet, temperature=0.2, model=MODEL, max_tokens=8192, label="solution")
 
     return {
         "solutions": result.designs,
@@ -237,6 +321,7 @@ dependencies (e.g. data/integration foundations before advanced AI). Group gaps 
 
 
 async def roadmap_node(state: AuditState) -> AuditState:
+    log.info("NODE roadmap_agent — sequencing phased roadmap (%s, post-approval)", MODEL)
     gaps = state["gaps"]
     gaps_json = "\n".join(
         f"- {g.feature_name} [{g.severity}] ROI=${g.estimated_annual_roi:,.0f} "
@@ -244,8 +329,7 @@ async def roadmap_node(state: AuditState) -> AuditState:
         for g in gaps
     )
 
-    llm = _llm(temperature=0.2).with_structured_output(Roadmap)
-    roadmap: Roadmap = await llm.ainvoke([
+    roadmap: Roadmap = await _structured([
         SystemMessage(content=ROADMAP_SYSTEM),
         HumanMessage(content=f"""Sequence these prioritized gaps into a phased roadmap:
 
@@ -253,7 +337,7 @@ async def roadmap_node(state: AuditState) -> AuditState:
 
 Return 3-4 phases (quick wins first), each naming the gaps addressed, expected ROI, and rationale. \
 Include a total estimated ROI and a 2-3 sentence executive summary."""),
-    ])
+    ], Roadmap, temperature=0.2, model=MODEL, label="roadmap")
 
     return {
         "roadmap": roadmap,

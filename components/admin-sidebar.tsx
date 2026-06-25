@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, TrendingUp, LogOut } from "lucide-react"
+import { LayoutDashboard, Users, ClipboardCheck, TrendingUp, LogOut } from "lucide-react"
 
 const links = [
   { href: "/admin/dashboard", icon: LayoutDashboard, label: "Overview" },
   { href: "/admin/clients", icon: Users, label: "Clients" },
+  { href: "/admin/approvals", icon: ClipboardCheck, label: "Approvals" },
 ]
 
 export default function AdminSidebar() {

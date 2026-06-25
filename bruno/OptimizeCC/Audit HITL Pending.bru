@@ -1,0 +1,15 @@
+meta {
+  name: Audit HITL Pending
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/audit/hitl/pending
+  auth: none
+}
+
+docs {
+  The admin approval queue — audits paused awaiting human sign-off.
+  GET /audit/hitl/state/{thread_id} returns one audit's full gap list.
+}

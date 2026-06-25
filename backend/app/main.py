@@ -15,6 +15,21 @@ from app.core.database import engine
 # no handler under uvicorn and its INFO logs are dropped by the root logger.
 configure_rag_logging()
 
+
+# Silence uvicorn's access log for high-frequency poll/probe endpoints so the
+# console stays readable (the approval queue polls /pending every few seconds).
+import logging as _logging
+from app.core.observability import QUIET_PATHS as _QUIET_PATHS
+
+
+class _QuietAccessFilter(_logging.Filter):
+    def filter(self, record: _logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in _QUIET_PATHS)
+
+
+_logging.getLogger("uvicorn.access").addFilter(_QuietAccessFilter())
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,

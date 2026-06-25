@@ -1,0 +1,41 @@
+meta {
+  name: Audit HITL Start
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/audit/hitl/start
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "thread_id": "demo-thread-001",
+    "client_name": "Meridian Bank",
+    "client_data": {
+      "platform": "Genesys Cloud CX",
+      "agent_count": 220,
+      "monthly_calls": 50000,
+      "fcr_pct": 62,
+      "aht_seconds": 480,
+      "ivr_deflection_pct": 28,
+      "csat_pct": 74,
+      "attrition_pct": 38,
+      "config_notes": "Legacy IVR, no screen-pop, manual QA sampling."
+    },
+    "client_context": { "industry": "Retail Banking", "cost_per_call": 8.5 }
+  }
+}
+
+docs {
+  Runs the agent pipeline (retrieval -> research -> gap -> tool_agent -> solution)
+  and PAUSES before the roadmap (interrupt_before). Returns gaps awaiting approval.
+  Needs ANTHROPIC_API_KEY; takes ~30s. Then review in /admin/approvals or via the
+  Pending/State/Approve requests below.
+}

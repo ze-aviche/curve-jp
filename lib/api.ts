@@ -1,5 +1,19 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
+export type RoadmapPhase = {
+  phase: number
+  name: string
+  duration: string
+  gaps_addressed: string[]
+  expected_roi: number
+  rationale: string
+}
+export type Roadmap = {
+  phases: RoadmapPhase[]
+  total_estimated_roi: number
+  executive_summary: string
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
   const res = await fetch(`${BASE}${path}`, {
@@ -37,6 +51,32 @@ export const api = {
   industryPlayers: {
     list: (category?: string) =>
       req(`/api/v1/industry-players/${category ? `?category=${category}` : ""}`),
+  },
+  audit: {
+    hitlStart: (data: {
+      thread_id: string
+      client_name?: string
+      client_data: Record<string, unknown>
+      client_context?: Record<string, unknown>
+    }) => req("/api/v1/audit/hitl/start", { method: "POST", body: JSON.stringify(data) }),
+    hitlPending: () =>
+      req<{
+        pending: { thread_id: string; client_name: string; status: string; gap_count: number; seq: number }[]
+      }>("/api/v1/audit/hitl/pending"),
+    hitlState: (threadId: string) =>
+      req<{
+        thread_id: string
+        client_name: string
+        status: string
+        gaps: { feature_name: string; category: string; severity: string; business_impact: string; estimated_annual_roi: number }[]
+        tool_findings: string
+        roadmap: Roadmap | null
+      }>(`/api/v1/audit/hitl/state/${threadId}`),
+    hitlApprove: (data: { thread_id: string; approved?: boolean; drop_gaps?: string[] }) =>
+      req<{ thread_id: string; status: string; roadmap?: Roadmap | null }>(
+        "/api/v1/audit/hitl/approve",
+        { method: "POST", body: JSON.stringify(data) },
+      ),
   },
   voice: {
     analytics: () =>

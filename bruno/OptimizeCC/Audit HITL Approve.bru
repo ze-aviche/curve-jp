@@ -1,0 +1,30 @@
+meta {
+  name: Audit HITL Approve
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/audit/hitl/approve
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "thread_id": "demo-thread-001",
+    "approved": true,
+    "drop_gaps": []
+  }
+}
+
+docs {
+  Analyst decision. approved=true resumes the graph through the roadmap agent and
+  returns the final roadmap. drop_gaps (list of gap feature_names) edits the agent
+  state first — the roadmap is then generated on the human-curated gap set.
+  approved=false rejects the audit.
+}

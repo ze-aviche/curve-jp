@@ -19,10 +19,21 @@ Run order enforced here:  research -> gap_analysis -> roadmap -> END
 """
 from __future__ import annotations
 
-from langgraph.checkpoint.memory import MemorySaver
+import os
+import sqlite3
+
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.state import AuditState
+from app.rag.rag_logging import get_logger
+
+log = get_logger("agents")
+
+# Durable checkpoint + registry store (survives restarts/crashes — the resumability
+# story). Swap this path for a Postgres DSN + PostgresSaver in production.
+CHECKPOINT_DB = os.path.join(os.path.dirname(__file__), "..", "..", "data", "agent_checkpoints.sqlite")
 from app.agents.nodes import (
     gap_analysis_node,
     research_node,
@@ -52,7 +63,10 @@ def supervisor(state: AuditState) -> AuditState:
     completed = state.get("completed", [])
     for step in PIPELINE:
         if step not in completed:
+            log.info("SUPERVISOR -> routing to %-15s (completed: %s)",
+                     step, completed or "[]")
             return {"next": step}
+    log.info("SUPERVISOR -> all agents complete, FINISH")
     return {"next": "FINISH"}
 
 
@@ -109,15 +123,27 @@ def build_audit_graph(checkpointer=None, interrupt_before=None):
 audit_graph = build_audit_graph()
 
 # --- Human-in-the-loop variant -------------------------------------------------
-# Same graph, but with a checkpointer (durable per-thread state) and an interrupt
+# Same graph, but with a DURABLE checkpointer (AsyncSqliteSaver) and an interrupt
 # BEFORE the roadmap so a human reviews the gaps/solutions before the final plan.
-# MemorySaver is in-process; swap for SqliteSaver/PostgresSaver in prod (same API)
-# to survive restarts — the index/state then resumes after a crash.
-hitl_checkpointer = MemorySaver()
-hitl_graph = build_audit_graph(
-    checkpointer=hitl_checkpointer,
-    interrupt_before=["roadmap_agent"],
-)
+# Because the saver is SQLite-backed, a paused audit survives a process restart and
+# resumes from its last checkpoint — the production resumability story (swap the
+# path for a Postgres DSN + PostgresSaver and nothing else changes).
+#
+# The async saver needs an aiosqlite connection, which must be created inside an
+# event loop — so we build the HITL graph lazily on first use, not at import.
+_hitl_graph = None
+_hitl_conn = None
+
+
+async def _get_hitl_graph():
+    global _hitl_graph, _hitl_conn
+    if _hitl_graph is None:
+        os.makedirs(os.path.dirname(CHECKPOINT_DB), exist_ok=True)
+        _hitl_conn = await aiosqlite.connect(CHECKPOINT_DB)
+        saver = AsyncSqliteSaver(_hitl_conn)
+        _hitl_graph = build_audit_graph(checkpointer=saver, interrupt_before=["roadmap_agent"])
+        log.info("HITL graph ready — durable checkpoints at %s", os.path.abspath(CHECKPOINT_DB))
+    return _hitl_graph
 
 
 async def run_audit(client_data: dict, client_context: dict | None = None) -> AuditState:
@@ -163,23 +189,104 @@ def _config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
 
-async def start_audit_hitl(thread_id: str, client_data: dict, client_context: dict | None = None) -> dict:
+# Durable registry of HITL audits for the admin approval queue. Kept in the SAME
+# SQLite file as the checkpoints so the queue survives restarts alongside the agent
+# state. (Tiny, infrequent writes — a plain sqlite3 table is plenty.)
+def _registry_conn() -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(CHECKPOINT_DB), exist_ok=True)
+    conn = sqlite3.connect(CHECKPOINT_DB)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS hitl_registry ("
+        "thread_id TEXT PRIMARY KEY, client_name TEXT, status TEXT, "
+        "gap_count INTEGER, seq INTEGER)"
+    )
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _registry_upsert(thread_id: str, **fields) -> None:
+    conn = _registry_conn()
+    try:
+        row = conn.execute("SELECT seq FROM hitl_registry WHERE thread_id=?", (thread_id,)).fetchone()
+        if row is None:
+            nxt = (conn.execute("SELECT COALESCE(MAX(seq),0)+1 FROM hitl_registry").fetchone()[0])
+            conn.execute(
+                "INSERT INTO hitl_registry(thread_id, client_name, status, gap_count, seq) "
+                "VALUES (?,?,?,?,?)",
+                (thread_id, fields.get("client_name", thread_id), fields.get("status", ""),
+                 fields.get("gap_count", 0), nxt),
+            )
+        else:
+            sets = ", ".join(f"{k}=?" for k in fields)
+            conn.execute(f"UPDATE hitl_registry SET {sets} WHERE thread_id=?",
+                         (*fields.values(), thread_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_pending_audits() -> list[dict]:
+    """Queue for the admin approvals screen — newest first."""
+    conn = _registry_conn()
+    try:
+        rows = conn.execute("SELECT * FROM hitl_registry ORDER BY seq DESC").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+async def get_audit_state(thread_id: str) -> dict:
+    """Full saved state for one audit (gaps/solutions/findings) for the review screen."""
+    conn = _registry_conn()
+    try:
+        row = conn.execute("SELECT * FROM hitl_registry WHERE thread_id=?", (thread_id,)).fetchone()
+        meta = dict(row) if row else {}
+    finally:
+        conn.close()
+    graph = await _get_hitl_graph()
+    snap = await graph.aget_state(_config(thread_id))
+    return {
+        **meta,
+        "gaps": snap.values.get("gaps", []),
+        "solutions": snap.values.get("solutions", []),
+        "tool_findings": snap.values.get("tool_findings", ""),
+        "research": snap.values.get("research"),
+        "roadmap": snap.values.get("roadmap"),
+    }
+
+
+async def start_audit_hitl(
+    thread_id: str,
+    client_data: dict,
+    client_context: dict | None = None,
+    client_name: str | None = None,
+) -> dict:
     """Run the audit until it pauses for human approval (before the roadmap).
 
-    Returns the gaps/solutions awaiting sign-off plus the node it's paused at.
+    Returns the gaps/solutions awaiting sign-off plus the node it's paused at, and
+    registers the audit in the admin approval queue.
     """
+    name = client_name or (client_context or {}).get("company") or thread_id
+    log.info("AUDIT START — thread=%s client=%s", thread_id, name)
     initial: AuditState = {
         "client_data": client_data,
         "client_context": client_context or {},
         "completed": [],
     }
+    graph = await _get_hitl_graph()
     config = _config(thread_id)
     # Runs through research/gap/tool/solution, then STOPS before roadmap_agent.
-    await hitl_graph.ainvoke(initial, config)
-    snap = hitl_graph.get_state(config)
+    await graph.ainvoke(initial, config)
+    snap = await graph.aget_state(config)
+    status = "awaiting_approval" if snap.next else "complete"
+    gap_count = len(snap.values.get("gaps", []))
+
+    _registry_upsert(thread_id, client_name=name, status=status, gap_count=gap_count)
+    log.info("AUDIT PAUSED — thread=%s status=%s, %d gaps WAITING FOR HUMAN APPROVAL "
+             "(paused before %s)", thread_id, status, gap_count, list(snap.next))
     return {
         "thread_id": thread_id,
-        "status": "awaiting_approval" if snap.next else "complete",
+        "status": status,
         "paused_before": list(snap.next),
         "gaps": snap.values.get("gaps", []),
         "solutions": snap.values.get("solutions", []),
@@ -194,22 +301,30 @@ async def resume_audit_hitl(thread_id: str, approved: bool = True, drop_gaps: li
     the state — the human's decision becomes part of the agent state before the
     roadmap agent runs on it.
     """
+    graph = await _get_hitl_graph()
     config = _config(thread_id)
-    snap = hitl_graph.get_state(config)
+    snap = await graph.aget_state(config)
     if not snap.next:
         return {"thread_id": thread_id, "status": "already_complete"}
     if not approved:
+        log.info("AUDIT REJECTED by reviewer — thread=%s", thread_id)
+        _registry_upsert(thread_id, status="rejected")
         return {"thread_id": thread_id, "status": "rejected"}
 
     if drop_gaps:
         kept = [g for g in snap.values.get("gaps", []) if g.feature_name not in set(drop_gaps)]
-        hitl_graph.update_state(config, {"gaps": kept, "human_approved": True})
+        log.info("APPROVED with edits — thread=%s dropped %d gap(s)", thread_id, len(drop_gaps))
+        await graph.aupdate_state(config, {"gaps": kept, "human_approved": True})
     else:
-        hitl_graph.update_state(config, {"human_approved": True})
+        log.info("APPROVED — thread=%s, resuming to roadmap", thread_id)
+        await graph.aupdate_state(config, {"human_approved": True})
 
     # Resume: passing None continues from the saved checkpoint to the end.
-    await hitl_graph.ainvoke(None, config)
-    final = hitl_graph.get_state(config)
+    await graph.ainvoke(None, config)
+    final = await graph.aget_state(config)
+    gap_count = len(final.values.get("gaps", []))
+    _registry_upsert(thread_id, status="complete", gap_count=gap_count)
+    log.info("AUDIT COMPLETE — thread=%s, roadmap generated", thread_id)
     return {
         "thread_id": thread_id,
         "status": "complete",
