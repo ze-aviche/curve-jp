@@ -361,6 +361,11 @@ export default function OnboardingPage() {
     // the customer's roadmap is generated. We don't block the UI on the ~30s run.
     const threadId = globalThis.crypto?.randomUUID?.() ?? `audit-${Date.now()}`
     const company = form.company?.trim() || `Onboarding ${threadId.slice(0, 8)}`
+    // Remember this customer's audit so /dashboard and /audit can show its real status.
+    try {
+      localStorage.setItem("auditThreadId", threadId)
+      localStorage.setItem("auditCompany", company)
+    } catch {}
     api.audit
       .hitlStart({
         thread_id: threadId,

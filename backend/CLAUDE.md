@@ -44,6 +44,9 @@ backend/
 │   │   ├── nodes.py                 # Specialist agents: retrieval/research/gap/solution/roadmap
 │   │   ├── graph.py                 # StateGraph + supervisor + streaming
 │   │   └── __init__.py              # exposes audit_graph, run_audit
+│   ├── mcp/                         # Model Context Protocol surface  ← MCP
+│   │   ├── server.py                # FastMCP server: audit tools over SSE/HTTP
+│   │   └── client.py                # MCP client (async ctx mgr) → LangChain tools
 │   ├── rag/                         # Retrieval-Augmented Generation  ← PHASE 2
 │   │   ├── store.py                 # VectorStore Protocol + ChromaStore adapter
 │   │   ├── ingest.py                # Chunk + embed + upsert knowledge docs
@@ -121,6 +124,25 @@ START → supervisor ⇄ { retrieval → research → gap → tool → solution 
 
 Run: `python -m scripts.run_audit_demo` (needs `ANTHROPIC_API_KEY`).
 
+### MCP — tools as a standard, networked service (`app/mcp/`)
+The `tool_agent`'s tools (`lookup_benchmark` / `estimate_annual_savings` /
+`search_knowledge`) are exposed over the **Model Context Protocol** so they are no
+longer locked to the agent's process — any MCP client (our agent, Claude Desktop,
+Cursor, a Kore.ai XO integration) can discover and call them.
+- **One implementation, two surfaces**: tool bodies live in `app/agents/tools.py`
+  as `*_impl` plain functions. Both the in-process LangChain `@tool` wrappers and
+  the MCP server (`app/mcp/server.py`) delegate to them — they can't drift.
+- **Server**: `python -m app.mcp.server` → FastMCP serves the tools at
+  `http://127.0.0.1:8001/sse`. (SSE is the HTTP transport this pinned `mcp`/`fastapi`
+  stack supports; Streamable HTTP needs a newer `mcp` that conflicts with fastapi's
+  `starlette` pin. For desktop clients, `mcp.run(transport="stdio")`.)
+- **Client**: `tool_agent_node` opens `app/mcp/client.py:audit_tools()` (an async
+  context manager) for the life of the ReAct loop; `langchain-mcp-adapters` wraps
+  the MCP tools as LangChain tools so `bind_tools(...)` is unchanged.
+- **Resilient**: if `MCP_ENABLED=False` or the server is unreachable, the node
+  falls back to the in-process tools — the audit still runs (`used_mcp` flags which
+  path was taken). Start the server first to exercise the real MCP path.
+
 ---
 
 ## RAG Layer
@@ -183,6 +205,7 @@ pip install -r requirements.txt
 python -m app.rag.ingest                    # build the local vector index (once)
 python -m app.integrations.voice_connector  # pull voice transcripts (optional)
 set ANTHROPIC_API_KEY=sk-ant-...
+python -m app.mcp.server                    # MCP tool server → http://127.0.0.1:8001/sse (separate terminal)
 uvicorn app.main:app --reload               # http://localhost:8000
 ```
 
@@ -199,6 +222,9 @@ docker compose up --build                    # postgres(pgvector)+redis+api+work
 | `DATABASE_URL` | async Postgres URL | local Postgres |
 | `REDIS_URL` | Redis (bus + cache) | `redis://localhost:6379` |
 | `EVENT_BUS_BACKEND` | `memory` or `redis` | `memory` |
+| `MCP_ENABLED` | use the MCP tool server (else in-process tools) | `True` |
+| `MCP_HOST` / `MCP_PORT` | MCP server bind address | `127.0.0.1` / `8001` |
+| `MCP_URL` | MCP SSE endpoint the agent connects to | `http://127.0.0.1:8001/sse` |
 | `ANTHROPIC_API_KEY` | Claude (agents) | — |
 | `VOICE_AGENT_DB_PATH` | amber-voice-agent SQLite path | `D:\projects\amber-voice-agent\tenants.db` |
 | `CACHE_TTL_SECONDS` | cache-aside TTL | `300` |

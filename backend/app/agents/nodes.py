@@ -30,7 +30,7 @@ from app.agents.state import (
     Roadmap,
     SolutionDesignSet,
 )
-from app.agents.tools import TOOLS, TOOL_MAP
+from app.mcp.client import audit_tools
 
 log = get_logger("agents")
 
@@ -232,36 +232,42 @@ async def tool_agent_node(state: AuditState) -> AuditState:
     top_gaps = state.get("gaps", [])[:3]
     gaps_txt = "; ".join(f"{g.feature_name} ({g.category})" for g in top_gaps) or "n/a"
 
-    llm = _llm(model=FAST_MODEL).bind_tools(TOOLS)
-    messages: list = [
-        SystemMessage(content=TOOL_AGENT_SYSTEM),
-        HumanMessage(content=f"""Client metrics: FCR={cd.get('fcr_pct','?')}%, \
+    calls_made: list[dict] = []
+    final_text = ""
+    # Hold the MCP session open for the whole ReAct loop (tools are bound to it);
+    # falls back to in-process tools if the MCP server is unreachable.
+    async with audit_tools() as (tools, used_mcp):
+        tool_map = {t.name: t for t in tools}
+        log.info("tool_agent tools loaded via %s", "MCP" if used_mcp else "in-process")
+        llm = _llm(model=FAST_MODEL).bind_tools(tools)
+        messages: list = [
+            SystemMessage(content=TOOL_AGENT_SYSTEM),
+            HumanMessage(content=f"""Client metrics: FCR={cd.get('fcr_pct','?')}%, \
 AHT={cd.get('aht_seconds','?')}s, IVR deflection={cd.get('ivr_deflection_pct','?')}%, \
 CSAT={cd.get('csat_pct','?')}%, attrition={cd.get('attrition_pct','?')}%, \
 monthly_calls={cd.get('monthly_calls', 50000)}.
 Top gaps to validate: {gaps_txt}.
 Validate the ROI of closing these gaps using the tools."""),
-    ]
+        ]
 
-    calls_made: list[dict] = []
-    final_text = ""
-    for _ in range(MAX_TOOL_ITERS):
-        ai = await llm.ainvoke(messages)
-        messages.append(ai)
-        tool_calls = getattr(ai, "tool_calls", None) or []
-        if not tool_calls:
-            final_text = ai.content if isinstance(ai.content, str) else str(ai.content)
-            break
-        # Execute each requested tool and feed the observation back to the model.
-        for tc in tool_calls:
-            name, args = tc["name"], tc.get("args", {})
-            log.info("tool_agent -> %s(%s)", name, args)
-            calls_made.append({"tool": name, "args": args})
-            try:
-                observation = TOOL_MAP[name].invoke(args)
-            except Exception as e:  # a bad tool call shouldn't kill the agent
-                observation = f"tool error: {e}"
-            messages.append(ToolMessage(content=str(observation), tool_call_id=tc["id"]))
+        for _ in range(MAX_TOOL_ITERS):
+            ai = await llm.ainvoke(messages)
+            messages.append(ai)
+            tool_calls = getattr(ai, "tool_calls", None) or []
+            if not tool_calls:
+                final_text = ai.content if isinstance(ai.content, str) else str(ai.content)
+                break
+            # Execute each requested tool and feed the observation back to the model.
+            for tc in tool_calls:
+                name, args = tc["name"], tc.get("args", {})
+                log.info("tool_agent -> %s(%s)", name, args)
+                calls_made.append({"tool": name, "args": args})
+                try:
+                    # ainvoke works for both MCP-backed (async) and in-process tools.
+                    observation = await tool_map[name].ainvoke(args)
+                except Exception as e:  # a bad tool call shouldn't kill the agent
+                    observation = f"tool error: {e}"
+                messages.append(ToolMessage(content=str(observation), tool_call_id=tc["id"]))
 
     log.info("tool_agent done — %d tool calls", len(calls_made))
     return {

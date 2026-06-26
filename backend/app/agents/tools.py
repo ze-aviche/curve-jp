@@ -11,10 +11,15 @@ definition of an "agent" in LangChain/LangGraph/Kore.ai (Kore.ai calls these
 Each tool below is a plain Python function wrapped with LangChain's @tool decorator,
 which auto-generates the JSON schema Claude needs for tool-calling. The model picks
 which to call and with what arguments; we execute and feed the result back.
+
+MCP NOTE — the actual logic lives in the `*_impl` plain functions below. Both the
+@tool wrappers here (in-process fallback) and the MCP server in `app/mcp/server.py`
+call the same `*_impl` functions, so a tool behaves identically whether the agent
+calls it locally or over the Model Context Protocol. See `app/mcp/` for the server.
 """
 from __future__ import annotations
 
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool
 
 from app.rag.store import get_store
 
@@ -29,8 +34,12 @@ _BENCHMARKS: dict[str, dict] = {
 }
 
 
-@tool
-def lookup_benchmark(metric: str) -> str:
+# ---------------------------------------------------------------------------
+# Plain implementations — shared by the @tool wrappers (below) and the MCP
+# server (app/mcp/server.py). Keep all behavior here so the two surfaces never
+# drift.
+# ---------------------------------------------------------------------------
+def lookup_benchmark_impl(metric: str) -> str:
     """Return the industry benchmark target for a contact-center metric.
 
     `metric` must be one of: fcr_pct, ivr_deflection_pct, csat_pct, aht_seconds,
@@ -43,8 +52,7 @@ def lookup_benchmark(metric: str) -> str:
     return f"{b['label']} ({metric}): target {b['target']} ({better} is better)."
 
 
-@tool
-def estimate_annual_savings(
+def estimate_annual_savings_impl(
     metric: str,
     current: float,
     monthly_calls: int,
@@ -76,8 +84,7 @@ def estimate_annual_savings(
     )
 
 
-@tool
-def search_knowledge(query: str) -> str:
+def search_knowledge_impl(query: str) -> str:
     """Semantic-search the knowledge base (benchmarks, call transcripts) for context.
 
     Use this to pull supporting evidence for a finding before quantifying it.
@@ -94,6 +101,16 @@ def search_knowledge(query: str) -> str:
     )
 
 
-# Registry the agent node binds and dispatches against.
+# --- LangChain tool wrappers (in-process path / MCP fallback) ---------------
+# StructuredTool.from_function derives name + JSON schema from each impl; we pin
+# the names so they match the MCP tool names exactly (the agent dispatches by
+# name, so local and MCP tools must agree).
+lookup_benchmark = StructuredTool.from_function(lookup_benchmark_impl, name="lookup_benchmark")
+estimate_annual_savings = StructuredTool.from_function(
+    estimate_annual_savings_impl, name="estimate_annual_savings"
+)
+search_knowledge = StructuredTool.from_function(search_knowledge_impl, name="search_knowledge")
+
+# Registry the agent node binds and dispatches against when MCP is unavailable.
 TOOLS = [lookup_benchmark, estimate_annual_savings, search_knowledge]
 TOOL_MAP = {t.name: t for t in TOOLS}

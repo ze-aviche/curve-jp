@@ -19,6 +19,17 @@ class Settings(BaseSettings):
 
     # Event bus transport: "memory" (single process) or "redis" (scaled web+worker)
     EVENT_BUS_BACKEND: str = "memory"
+
+    # MCP (Model Context Protocol) tool server — exposes the audit tools over
+    # Streamable HTTP so any MCP client can call them. The tool_agent connects
+    # here as an MCP client; if unreachable it falls back to in-process tools.
+    MCP_HOST: str = "127.0.0.1"
+    MCP_PORT: int = 8001
+    # SSE is the HTTP transport supported by the pinned mcp/fastapi stack
+    # (Streamable HTTP needs a newer mcp that conflicts with fastapi's starlette pin).
+    MCP_URL: str = "http://127.0.0.1:8001/sse"
+    # Toggle: when False, tool_agent skips MCP and uses in-process tools directly.
+    MCP_ENABLED: bool = True
     # Cache TTL for expensive reads (seconds)
     CACHE_TTL_SECONDS: int = 300
 

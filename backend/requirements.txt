@@ -21,7 +21,9 @@ langgraph-checkpoint==2.0.10  # base checkpointer (pinned <3 for langgraph 0.2.x
 langgraph-checkpoint-sqlite==2.0.1  # durable SQLite checkpointer for HITL resumability
 aiosqlite==0.20.0  # async SQLite driver for AsyncSqliteSaver
 langchain-anthropic==0.2.3
-langchain-core==0.3.10
+langchain-core==0.3.86  # bumped from 0.3.10 for langchain-mcp-adapters (needs >=0.3.36)
+mcp==1.6.0  # Model Context Protocol SDK — FastMCP server in app/mcp/server.py
+langchain-mcp-adapters==0.0.9  # loads MCP server tools as LangChain tools (app/mcp/client.py)
 chromadb==1.5.9  # local vector store for the RAG layer (app/rag)
 pypdf==5.1.0  # PDF text extraction for the RAG ingest pipeline (app/rag/ingest)
 reportlab==4.2.5  # PDF generation for onboarding + audit report downloads (app/reports)

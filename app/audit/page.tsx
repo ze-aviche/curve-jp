@@ -3,7 +3,9 @@
 import { useState } from "react"
 import { motion } from "framer-motion"
 import CustomerSidebar from "@/components/customer-sidebar"
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ChevronDown, DollarSign, TrendingUp } from "lucide-react"
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, ChevronDown, DollarSign, TrendingUp, Sparkles, Download } from "lucide-react"
+import AuditStatusBanner, { useMyAudit } from "@/components/audit-status-banner"
+import { api, type Roadmap } from "@/lib/api"
 
 const gaps = [
   {
@@ -124,10 +126,17 @@ export default function AuditPage() {
         <div className="max-w-5xl">
 
           {/* Page header */}
-          <div className="mb-10">
-            <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-1">Meridian Bank</p>
+          <div className="mb-6">
             <h1 className="text-3xl font-bold text-slate-900">Audit Report</h1>
-            <p className="text-slate-500 text-base mt-1">28 gaps identified · $1.2M annual improvement opportunity</p>
+            <p className="text-slate-500 text-base mt-1">Your prioritized contact center improvement roadmap</p>
+          </div>
+
+          {/* Live status + real roadmap (from the customer's submitted audit) */}
+          <AuditStatusBanner variant="audit" />
+          <MyRoadmap />
+
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 mt-10">
+            Example framework detail
           </div>
 
           {/* Executive summary */}
@@ -241,5 +250,72 @@ export default function AuditPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+/** Renders the customer's REAL approved roadmap (or a waiting state). */
+function MyRoadmap() {
+  const { audit, loading } = useMyAudit()
+  if (loading || !audit || audit.status !== "complete") return null
+  const roadmap = audit.roadmap as Roadmap | null
+  if (!roadmap) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white border border-slate-200 rounded-2xl p-7 mb-4 shadow-sm"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-emerald-500" />
+          <h2 className="text-lg font-bold text-slate-900">{audit.client_name} — Your Roadmap</h2>
+        </div>
+        <a
+          href={api.audit.reportPdfUrl(audit.thread_id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0a1628] hover:bg-[#0a1628]/90 rounded-xl px-4 py-2"
+        >
+          <Download className="w-4 h-4" /> Download PDF
+        </a>
+      </div>
+
+      <div className="rounded-xl bg-[#0a1628] text-white p-4 mb-5 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-white/50 font-semibold">Total Estimated Annual ROI</p>
+          <p className="text-2xl font-bold">
+            ${Math.round(roadmap.total_estimated_roi).toLocaleString()}
+          </p>
+        </div>
+        <TrendingUp className="w-8 h-8 text-blue-400" />
+      </div>
+
+      <p className="text-sm text-slate-600 mb-5 leading-relaxed">{roadmap.executive_summary}</p>
+
+      <div className="space-y-3">
+        {roadmap.phases.map((ph) => (
+          <div key={ph.phase} className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-slate-900 text-sm">
+                Phase {ph.phase}: {ph.name}
+              </h3>
+              <span className="text-xs font-semibold text-emerald-600">
+                ~${Math.round(ph.expected_roi).toLocaleString()}/yr
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mb-2">{ph.duration}</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {ph.gaps_addressed.map((g) => (
+                <span key={g} className="text-[10px] bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
+                  {g}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">{ph.rationale}</p>
+          </div>
+        ))}
+      </div>
+    </motion.div>
   )
 }

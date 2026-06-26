@@ -5,6 +5,7 @@ import { TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign, ArrowRight,
 import Link from "next/link"
 import { categories } from "@/lib/data"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import AuditStatusBanner from "@/components/audit-status-banner"
 
 const recentActivity = [
   { text: "Platform API connected successfully", time: "2 hours ago", icon: CheckCircle2, iconBg: "bg-emerald-50 border-emerald-200", iconColor: "text-emerald-600" },
@@ -37,6 +38,9 @@ const gapSummary = [
 export default function CustomerDashboard() {
   return (
     <div className="p-8 lg:p-10 max-w-7xl">
+
+      {/* Live audit status (real data from the customer's submitted audit) */}
+      <AuditStatusBanner variant="dashboard" />
 
       {/* Page header */}
       <div className="flex items-start justify-between mb-10">
